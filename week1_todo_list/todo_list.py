@@ -1,5 +1,4 @@
 import uuid
-import copy
 import dash_mantine_components as dmc
 from dash import Dash, _dash_renderer, dcc, ctx, Input, Output, State, ALL, html
 from dash.exceptions import PreventUpdate
@@ -209,16 +208,6 @@ def get_progression(list_item):
     if len(tasks) == 0:
         return 0
     return len([task for task in tasks if task["checked"]]) * 100 / len(tasks)
-
-def get_new_list_button():
-    return dmc.Button(
-        "New list",
-        id="new_list_button",
-        style={"width": "100%"},
-        color="black",
-        mt="md",
-        mb="md"
-    )
 
 def get_pos_from_index(dict_list, index):
     """ Retrieves the current position in a list of dicts given an index """
