@@ -22,3 +22,13 @@
 .task-del-button:hover {
     color: red;
 }
+
+#list_navigation_layout > div {
+    opacity: 0.7; 
+}
+
+/* Opacity is a good way to emphasize some elements */
+#list_navigation_layout > div.active {
+    border-color: black;
+    opacity: 1.0;
+} 
