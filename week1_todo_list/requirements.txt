@@ -4,10 +4,10 @@ dash-mantine-components==2.3.0
 dash-iconify==0.1.2
 
 # --- Data handling (if you store or manipulate tasks) ---
-pandas==2.2.3
+# pandas==2.2.3
 
 # --- For running inside Docker or Cloud ---
 gunicorn==23.0.0
 
 # --- Optional AI / Gemini support ---
-google-generativeai==0.8.3
+# google-generativeai==0.8.3
