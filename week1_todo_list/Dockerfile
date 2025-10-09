@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 8059
 
 # Command to run the app
-CMD ["python", "todo_list.py"]
+CMD ["python", "main.py"]
