@@ -60,7 +60,7 @@ layout = dmc.MantineProvider(
             size=600,
         ),
         html.Footer(
-            "© 2025 developed by SNing",
+            "© developed by SzeNing 2025",
             style={
                 "textAlign": "center",
                 "padding": "10px",
