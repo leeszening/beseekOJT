@@ -8,3 +8,7 @@ steps:
   id: 'Build Docker Image'
 images:
 - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# then execute this: gcloud builds submit --config cloudbuild.yaml .
