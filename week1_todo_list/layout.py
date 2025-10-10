@@ -1,6 +1,6 @@
 import uuid
 import dash_mantine_components as dmc
-from dash import dcc
+from dash import dcc, html
 from dash_iconify import DashIconify
 from components import get_new_list_button, get_list_layout
 
@@ -58,6 +58,17 @@ layout = dmc.MantineProvider(
                 gutter="md",
             ),
             size=600,
+        ),
+        html.Footer(
+            "© 2025 developed by SNing",
+            style={
+                "textAlign": "center",
+                "padding": "10px",
+                "marginTop": "40px",
+                "color": "#666",
+                "fontSize": "14px",
+                "borderTop": "1px solid #ddd",
+            },
         ),
 
         #The stored data in localStorage
