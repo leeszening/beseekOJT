@@ -4,21 +4,21 @@ steps:
   args: ['-c', 'find /workspace -maxdepth 2'] # Lists files 2 deep in the build context
   id: 'List workspace contents'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:$SHORT_SHA', '.']
+  args: ['build', '-t', 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todo-list-app:$SHORT_SHA', '.']
   id: 'Build Docker Image'
   dir: 'week1_todo_list' # Set the working directory for the build
 
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:$SHORT_SHA']
+  args: ['push', 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todo-list-app:$SHORT_SHA']
   id: 'Push Docker Image'
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
   - 'run'
   - 'deploy'
-  - 'todolist'
+  - 'todo-list-app'
   - '--image'
-  - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:$SHORT_SHA'
+  - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todo-list-app:$SHORT_SHA'
   - '--region'
   - 'europe-west1'
   - '--platform'
@@ -27,7 +27,7 @@ steps:
   id: 'Deploy to Cloud Run'
 
 images:
-- 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:$SHORT_SHA'
+- 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todo-list-app:$SHORT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
