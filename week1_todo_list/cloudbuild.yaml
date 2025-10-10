@@ -1,68 +1,10 @@
-# This file contains instructions for Google Cloud Build to automate
-# the deployment of your application to Google Cloud Run.
-
 steps:
-  # Step 1: Build the Docker image for the application.
-  # The 'gcr.io/cloud-builders/docker' builder is used to execute Docker commands.
-  # We are building an image and tagging it with a unique identifier based on the commit SHA.
-  # The image will be stored in Artifact Registry.
-  #
-  #
-  # AMEND THIS SECTION:
-  # 1. Replace 'my-app-repo' with your Artifact Registry repository name.
-  #    (e.g., 'my-awesome-app-repo')
-  # 2. Replace 'my-app-image' with your desired image name.
-  #    (e.g., 'my-awesome-app-image')
-  # 3. Replace 'us-central1' if your repository is in a different region.
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '-t'
-      - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest'
-      - '.'
-
-  # Step 2: Push the Docker image to Artifact Registry.
-  # This makes the image available for deployment.
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
-      - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest' # <-- Ensure this line matches the one in the build step
-
-  # Step 3: Deploy the new image to Cloud Run.
-  # The 'gcr.io/cloud-builders/gcloud' builder is used to execute gcloud CLI commands.
-  # This command deploys the image to a Cloud Run service.
-  #
-  #
-  # AMEND THIS SECTION:
-  # 1. Replace 'my-app-service' with the name of your Cloud Run service.
-  #    (e.g., 'my-awesome-app-service')
-  # 2. Ensure the '--image' path matches the image you built and pushed above.
-  # 3. Replace 'us-central1' with the region where your Cloud Run service is located.
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'todolist'
-      - '--image'
-      - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest' # <-- Ensure this line matches the one in the build step
-      - '--region'
-      - 'europe-west1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated' # Allows public access to the service
-
-# The 'images' section specifies which images to store in Artifact Registry
-# after the build is complete.
-#
-# AMEND THIS SECTION:
-# Ensure this image path exactly matches the one used in the build and push steps above.
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args: ['-c', 'find /workspace -maxdepth 2'] # Lists files 2 deep in the build context
+  id: 'List workspace contents'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest', '.']
+  id: 'Build Docker Image'
 images:
-      - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest' # <-- Ensure this line matches the one in the build step
-
-options:
-  logging: CLOUD_LOGGING_ONLY
-
-# then execute command to ensure your project is set up correctly.
-# : gcloud config set project YOUR_PROJECT_ID
-# : gcloud services enable cloudbuild.googleapis.com run.googleapis.com artifactregistry.googleapis.com
-# : gcloud artifacts repositories create my-app-repo --repository-format=docker --location=us-central1 --description="Docker repository for my application"
+- 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest'
