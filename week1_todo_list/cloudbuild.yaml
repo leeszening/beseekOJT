@@ -6,23 +6,11 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todo-list-app:$SHORT_SHA', '.']
   id: 'Build Docker Image'
+  dir: 'week1_todo_list' # Set the working directory for the build
 
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todo-list-app:$SHORT_SHA']
   id: 'Push Docker Image'
-
-- name: 'gcr.io/google-appengine/exec-wrapper'
-  args:
-  - '-i'
-  - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todo-list-app:$SHORT_SHA'
-  - '-e'
-  - 'PORT=8080'
-  - '--'
-  - 'gunicorn'
-  - '-b'
-  - ':8080'
-  - 'main:server'
-  id: 'Run Gunicorn'
 
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
