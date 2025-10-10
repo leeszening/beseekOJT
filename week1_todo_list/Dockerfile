@@ -13,8 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the app
 COPY . .
 
-# Expose the Dash port
-EXPOSE 8059
+# Expose the port Gunicorn will run on
+EXPOSE 8080
 
-# Command to run the app
-CMD ["python", "main.py"]
+# Command to run the app with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "main:server"]
