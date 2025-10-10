@@ -1,13 +1,5 @@
-# Exclude common development environment files
+# Exclude development environment files
 .venv/
 __pycache__/
-
-# Exclude the Google Cloud SDK installation
-google-cloud-sdk/
-
-# Exclude other development-specific files
-.git/
-.gitignore
-.DS_Store
-docker-compose.yml
-# Any other files or directories that are not needed for your build
+*.log
+# Add any other files/folders here that are not needed for the Docker build
