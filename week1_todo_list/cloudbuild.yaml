@@ -59,6 +59,9 @@ steps:
 images:
       - 'europe-west1-docker.pkg.dev/todolist-474507/todolist-repo/todolist:latest' # <-- Ensure this line matches the one in the build step
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 # then execute command to ensure your project is set up correctly.
 # : gcloud config set project YOUR_PROJECT_ID
 # : gcloud services enable cloudbuild.googleapis.com run.googleapis.com artifactregistry.googleapis.com
