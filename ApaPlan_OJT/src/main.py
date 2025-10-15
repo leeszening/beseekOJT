@@ -15,7 +15,7 @@ server.secret_key = SECRET_KEY
 
 # --- Dash app ---
 app = Dash(__name__, server=server, suppress_callback_exceptions=True)
-app.title = "Firebase Auth Demo"
+app.title = "ApaPlan"
 
 # --- Import layouts and callbacks ---
 from pages.login_page import login_layout, register_login_callbacks
