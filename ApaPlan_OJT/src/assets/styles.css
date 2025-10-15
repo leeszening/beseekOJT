@@ -1,0 +1,31 @@
+.login-status {
+    color: rgb(245, 109, 109);
+    font-size: smaller;
+}
+
+.update-status {
+    color: green;
+}
+
+.header {
+    height: 60px;
+    padding: 0 20px;
+    background-color: #f5f5f5;
+    width: 100%;
+}
+
+.sidebar {
+    width: 250px;
+    padding: 10px;
+    background-color: #f5f5f5;
+}
+
+.home-content {
+    flex: 1;
+    padding: 0 20px;
+}
+
+.login-card {
+    width: 400px;
+    padding: 30px;
+}

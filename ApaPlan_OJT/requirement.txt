@@ -1,0 +1,10 @@
+dash
+flask
+firebase-admin
+requests
+python-dotenv
+flask-login
+dash-mantine-components
+PyJWT
+requests
+gunicorn
