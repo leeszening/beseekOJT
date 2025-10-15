@@ -1,3 +1,6 @@
+## 📁 Project Structure
+
+```bash
 ApaPlan/
 ├── src/
 │   ├── main.py                     # Main Flask + Dash app entry
@@ -5,15 +8,15 @@ ApaPlan/
 │   │   ├── login.py                # Login, signup, reset password
 │   │   └── home.py                 # Home page with password change & logout
 │   ├── components/
-│   │   └── auth.py
-│   │   └── header.py
-│   │   └── sidebar.py
+│   │   ├── auth.py                 # Authentication utilities
+│   │   ├── header.py               # App header layout
+│   │   └── sidebar.py              # Sidebar navigation
 │   ├── assets/        
-│   │   └── style.css 
+│   │   └── style.css               # Custom styling
 │   └── shared/
-│   │   └── config.py   
+│       └── config.py               # Shared configuration settings
 ├── Dockerfile                      # For Cloud Run deployment (optional)
 ├── cloudbuild.yaml                 # For Cloud Build automation (optional)
-├── README.md
-├── firebase_config.py
-└── requirements.txt
+├── firebase_config.py              # Firebase configuration
+├── requirements.txt                # Python dependencies
+└── README.md
