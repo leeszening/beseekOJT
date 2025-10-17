@@ -1,39 +1,21 @@
 steps:
-  # Build the container image
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan:$COMMIT_SHA', '.']
-
-  # Push the container image to Artifact Registry
+  args: ['build', '-t', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan', '.']
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan:$COMMIT_SHA']
-
-  # Deploy container image to Cloud Run
+  args: ['push', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan']
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: gcloud
   args:
-    - 'run'
-    - 'deploy'
-    - 'auth'
-    - '--image'
-    - 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan:$COMMIT_SHA'
-    - '--region'
-    - 'europe-west1'
-    - '--platform'
-    - 'managed'
-    - '--set-secrets=FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest,SECRET_KEY=SECRET_KEY:latest'
-
-  # Allow unauthenticated invocations
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: gcloud
-  args:
-    - 'run'
-    - 'services'
-    - 'add-iam-policy-binding'
-    - 'auth'
-    - '--member=allUsers'
-    - '--role=roles/run.invoker'
-    - '--region=europe-west1'
-    - '--platform=managed'
-
+  - 'run'
+  - 'deploy'
+  - 'auth'
+  - '--image'
+  - 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan'
+  - '--region'
+  - 'europe-west1'
+  - '--platform'
+  - 'managed'
+  - '--allow-unauthenticated'
+  - '--set-secrets=FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest,SECRET_KEY=SECRET_KEY:latest'
 images:
-- 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan:$COMMIT_SHA'
+- 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan'
