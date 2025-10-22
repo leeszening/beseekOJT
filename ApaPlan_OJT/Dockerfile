@@ -14,8 +14,10 @@ COPY requirement.txt .
 RUN pip install --no-cache-dir -r requirement.txt
 
 # Copy the rest of the application code
-COPY src/ .
-COPY firebase_config.py .
+COPY . .
+
+# Add the project directory to the PYTHONPATH
+ENV PYTHONPATH=/app
 
 # Create a non-root user and switch to it
 RUN useradd --create-home appuser
@@ -25,4 +27,4 @@ USER appuser
 EXPOSE 8080
 
 # Run app.py when the container launches, using the PORT variable
-CMD ["python", "main.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "src.main:server"]

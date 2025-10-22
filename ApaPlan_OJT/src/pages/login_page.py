@@ -1,8 +1,12 @@
 import dash
-from dash import html, dcc, Input, Output, State
+from dash import html, Input, Output, State
 import dash_mantine_components as dmc
-from flask import session
-from components.auth import sign_in_user, create_user, send_password_reset_email
+from src.components.pyrebase_auth import (
+    sign_in_user,
+    send_password_reset_email_pyrebase,
+)
+from src.components.auth import create_user
+from src.shared.auth_utils import handle_auth_error
 
 login_layout = dmc.Center(
     dmc.Card(
@@ -12,18 +16,34 @@ login_layout = dmc.Center(
             dmc.PasswordInput(id="password", placeholder="Password"),
             dmc.Button("Login", id="login_btn", fullWidth=True, mt="sm"),
             html.Div(id="login_status", className="login-status"),
-            html.Div([
-                dmc.Button("Forgot Password?", id="reset_btn", variant="outline", size="xs", mt="sm"),
-                html.Span("  "),
-                dmc.Button("Don't have an account? Sign up", id="signup_btn", variant="outline", size="xs", mt="sm")
-            ]),
+            html.Div(
+                [
+                    dmc.Button(
+                        "Forgot Password?",
+                        id="reset_btn",
+                        variant="outline",
+                        size="xs",
+                        mt="sm",
+                    ),
+                    html.Span("  "),
+                    dmc.Button(
+                        "Don't have an account? Sign up",
+                        id="signup_btn",
+                        variant="outline",
+                        size="xs",
+                        mt="sm",
+                    ),
+                ]
+            ),
             # Signup Modal
             dmc.Modal(
                 id="signup_modal",
                 title="Sign Up",
                 children=[
                     dmc.TextInput(id="signup_email", placeholder="Email"),
-                    dmc.PasswordInput(id="signup_password", placeholder="Password", mt="sm"),
+                    dmc.PasswordInput(
+                        id="signup_password", placeholder="Password", mt="sm"
+                    ),
                     dmc.Button("Create Account", id="signup_submit", mt="sm"),
                     html.Div(id="signup_status", className="login-status")
                 ],
@@ -45,10 +65,11 @@ login_layout = dmc.Center(
     )
 )
 
+
 def register_login_callbacks(app):
     # Login
     @app.callback(
-        Output('url', 'pathname'),
+        Output('auth-store', 'data'),
         Output("login_status", "children"),
         Input("login_btn", "n_clicks"),
         State("email", "value"),
@@ -57,17 +78,27 @@ def register_login_callbacks(app):
     )
     def login(n_clicks, email, password):
         if not email or not password:
-            return dash.no_update, "Email and password required"
+            message = "⚠️ Email and password are required."
+            alert = dmc.Alert(
+                message, title="Error", color="yellow", withCloseButton=True
+            )
+            return dash.no_update, alert
 
         resp = sign_in_user(email, password)
 
-        if "idToken" in resp:
-            session["idToken"] = resp["idToken"]
-            session["email"] = email
-            return '/home', ''
+        if resp["status"] == "success":
+            auth_data = {
+                "idToken": resp["data"]["idToken"],
+                "email": email,
+                "localId": resp["data"]["localId"]
+            }
+            return auth_data, ''
         else:
-            error_msg = resp.get("error", {}).get("message", "Login failed")
-            return dash.no_update, error_msg
+            message = handle_auth_error(resp["message"])
+            alert = dmc.Alert(
+                message, title="Error", color="red", withCloseButton=True
+            )
+            return dash.no_update, alert
 
     # Signup Modal Open
     @app.callback(
@@ -97,14 +128,28 @@ def register_login_callbacks(app):
     )
     def signup(n_clicks, email, password):
         if not email or not password:
-            return "Email and password required"
+            message = "⚠️ Email and password are required."
+            return dmc.Alert(
+                message, title="Error", color="yellow", withCloseButton=True
+            )
+        if len(password) < 8:
+            message = "🔑 Your password must be at least 8 characters long."
+            return dmc.Alert(
+                message, title="Error", color="yellow", withCloseButton=True
+            )
 
         resp = create_user(email, password)
 
-        if "idToken" in resp:
-            return "Account created successfully! You can login now."
+        if resp["status"] == "success":
+            message = "✅ Account created successfully! You can now log in."
+            return dmc.Alert(
+                message, title="Success", color="green", withCloseButton=True
+            )
         else:
-            return "Signup failed: " + resp.get("error", {}).get("message", "")
+            message = handle_auth_error(resp["message"])
+            return dmc.Alert(
+                message, title="Error", color="red", withCloseButton=True
+            )
 
     # Reset Password Submit
     @app.callback(
@@ -115,11 +160,45 @@ def register_login_callbacks(app):
     )
     def reset_password(n_clicks, email):
         if not email:
-            return "Email required"
+            message = "⚠️ Email is required."
+            return dmc.Alert(
+                message, title="Error", color="yellow", withCloseButton=True
+            )
 
-        resp = send_password_reset_email(email)
+        resp = send_password_reset_email_pyrebase(email)
 
-        if "error" in resp:
-            return "Reset failed: " + resp["error"].get("message", "")
+        if resp["status"] == "success":
+            message = f"✅ Password reset email sent to {email}!"
+            return dmc.Alert(
+                message, title="Success", color="green", withCloseButton=True
+            )
         else:
-            return f"Password reset email sent to {email}!"
+            message = handle_auth_error(resp["message"])
+            return dmc.Alert(
+                message, title="Error", color="red", withCloseButton=True
+            )
+
+    # Reset signup modal on close
+    @app.callback(
+        Output("signup_email", "value"),
+        Output("signup_password", "value"),
+        Output("signup_status", "children", allow_duplicate=True),
+        Input("signup_modal", "opened"),
+        prevent_initial_call=True,
+    )
+    def reset_signup_fields(opened):
+        if not opened:
+            return "", "", ""
+        return dash.no_update, dash.no_update, dash.no_update
+
+    # Reset password modal on close
+    @app.callback(
+        Output("reset_email", "value"),
+        Output("reset_status", "children", allow_duplicate=True),
+        Input("reset_modal", "opened"),
+        prevent_initial_call=True,
+    )
+    def reset_reset_fields(opened):
+        if not opened:
+            return "", ""
+        return dash.no_update, dash.no_update

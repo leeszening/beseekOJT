@@ -3,19 +3,19 @@ steps:
   args: ['build', '-t', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan', '.']
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan']
-#- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-#  entrypoint: gcloud
-#  args:
-#  - 'run'
-#  - 'deploy'
-#  - 'auth'
-#  - '--image'
-#  - 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan'
-#  - '--region'
-#  - 'europe-west1'
-#  - '--platform'
-#  - 'managed'
-#  - '--allow-unauthenticated'
-#  - '--set-secrets=FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest,SECRET_KEY=SECRET_KEY:latest' 
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+  - 'run'
+  - 'deploy'
+  - 'auth'
+  - '--image'
+  - 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan'
+  - '--region'
+  - 'europe-west1'
+  - '--platform'
+  - 'managed'
+  - '--allow-unauthenticated'
+  - '--set-secrets=FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest,SECRET_KEY=SECRET_KEY:latest'
 images:
 - 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan'
