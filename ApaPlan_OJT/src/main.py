@@ -44,6 +44,18 @@ register_home_callbacks(app)
 register_profile_callbacks(app)
 
 
+# --- Logout an user ---
+@app.callback(
+    Output('auth-store', 'data', allow_duplicate=True),
+    Input('url', 'pathname'),
+    prevent_initial_call=True
+)
+def logout(pathname):
+    if pathname == '/logout':
+        return None
+    return dash.no_update
+
+
 # --- URL Router ---
 @app.callback(
     Output('page-content', 'children'),

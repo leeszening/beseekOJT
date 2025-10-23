@@ -1,5 +1,6 @@
 import logging
-from firebase_admin import auth, firestore, exceptions
+import uuid
+from firebase_admin import auth, firestore, exceptions, storage
 from firebase_config import db
 
 # Configure logging
@@ -107,6 +108,59 @@ def update_user_profile(uid, profile_data):
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
         return {"status": "error", "message": "UNEXPECTED_ERROR"}
+
+
+def upload_avatar(uid, file_contents, file_name):
+    """
+    Uploads an avatar image to Firebase Storage and updates the user's profile.
+    """
+    try:
+        logging.info(f"Starting avatar upload for user {uid}, filename: {file_name}")
+        bucket = storage.bucket()
+        file_extension = file_name.split('.')[-1].lower()
+        logging.info(f"File extension: {file_extension}")
+        
+        # Map file extensions to content types
+        content_type_mapping = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif'
+        }
+        content_type = content_type_mapping.get(file_extension)
+        logging.info(f"Content type: {content_type}")
+
+        if not content_type:
+            logging.warning(f"Unsupported file type for user {uid}: {file_extension}")
+            return {"status": "error", "message": "UNSUPPORTED_FILE_TYPE"}
+
+        unique_filename = f"avatars/{uid}/{uuid.uuid4()}.{file_extension}"
+        blob = bucket.blob(unique_filename)
+
+        logging.info(f"Uploading to Firebase Storage: {unique_filename}")
+        blob.upload_from_string(
+            file_contents,
+            content_type=content_type
+        )
+        logging.info("Upload to Storage successful.")
+
+        # Make the blob publicly viewable
+        logging.info("Making blob public.")
+        blob.make_public()
+        logging.info("Blob is now public.")
+
+        # Update user profile with the new avatar URL
+        logging.info(f"Updating user profile with new avatar URL: {blob.public_url}")
+        update_user_profile(uid, {"avatar_url": blob.public_url})
+        logging.info("User profile updated successfully.")
+
+        return {"status": "success", "data": {"avatar_url": blob.public_url}}
+    except exceptions.FirebaseError as e:
+        logging.error(f"Firebase error during avatar upload for user {uid}: {e}")
+        return {"status": "error", "message": "FIREBASE_ERROR"}
+    except Exception as e:
+        logging.error(f"Unexpected error during avatar upload for user {uid}: {e}")
+        return {"status": "error", "message": "AVATAR_UPLOAD_FAILED"}
 
 
 def update_user_password(uid, new_password):

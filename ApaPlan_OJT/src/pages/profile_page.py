@@ -3,10 +3,11 @@ import dash_mantine_components as dmc
 from dash import html, dcc, Input, Output, State
 from dash.dependencies import ClientsideFunction
 from src.components.auth import (
-    update_user_password, get_user_profile, update_user_profile
+    update_user_password, get_user_profile, update_user_profile, upload_avatar
 )
 from src.components.pyrebase_auth import sign_in_user
 from src.shared.auth_utils import handle_auth_error
+import base64
 
 
 def profile_layout():
@@ -37,9 +38,27 @@ def profile_layout():
                     html.Div(
                         id="profile-view-mode",
                         children=[
-                            dmc.Center(dmc.Avatar(
-                                id="user-avatar", size="xl", radius="xl"
-                            )),
+                            dmc.Center(
+                                dcc.Upload(
+                                    id='upload-avatar',
+                                    children=html.Div([
+                                        dmc.Avatar(
+                                            id="user-avatar", size="xl", radius="xl"
+                                        )
+                                    ]),
+                                    style={
+                                        'width': '100%',
+                                        'height': '60px',
+                                        'lineHeight': '60px',
+                                        'borderWidth': '1px',
+                                        'borderStyle': 'dashed',
+                                        'borderRadius': '5px',
+                                        'textAlign': 'center',
+                                        'margin': '10px'
+                                    },
+                                    multiple=False
+                                )
+                            ),
                             dmc.Space(h=20),
                             dmc.Group([
                                 dmc.Text("Username:"),
@@ -116,7 +135,7 @@ def profile_layout():
 
 def register_profile_callbacks(app):
     @app.callback(
-        Output("user-avatar", "children"),
+        Output("user-avatar", "src"),
         Output("username-display", "children"),
         Output("display-name-display", "children"),
         Output("user-email-display", "children"),
@@ -137,11 +156,11 @@ def register_profile_callbacks(app):
             display_name = profile.get("display_name", "")
             if not display_name:
                 display_name = profile.get("email", "").split('@')[0]
-            
-            avatar_initial = display_name[0].upper() if display_name else ""
+
+            avatar_url = profile.get("avatar_url", "")
 
             return (
-                avatar_initial,
+                avatar_url,
                 profile.get("username", "N/A"),
                 display_name,
                 profile.get("email", "N/A"),
@@ -151,6 +170,36 @@ def register_profile_callbacks(app):
             )
         else:
             return "", "N/A", "N/A", "N/A", "", "", None
+
+    @app.callback(
+        Output("user-avatar", "src", allow_duplicate=True),
+        Output("profile-status", "children", allow_duplicate=True),
+        Input("upload-avatar", "contents"),
+        State("upload-avatar", "filename"),
+        State("profile-uid-store", "data"),
+        prevent_initial_call=True
+    )
+    def handle_avatar_upload(contents, filename, uid):
+        if not contents:
+            return dash.no_update, dash.no_update
+
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string)
+
+        upload_resp = upload_avatar(uid, decoded, filename)
+
+        if upload_resp["status"] == "success":
+            return upload_resp["data"]["avatar_url"], dmc.Alert(
+                "Avatar updated successfully!",
+                color="green",
+                withCloseButton=True,
+                duration=3000
+            )
+        else:
+            error_message = "Failed to update avatar."
+            if upload_resp["message"] == "UNSUPPORTED_FILE_TYPE":
+                error_message = "Unsupported file type. Please upload a JPG, PNG, or GIF."
+            return dash.no_update, dmc.Alert(error_message, color="red")
 
     @app.callback(
         Output("edit-mode-store", "data"),

@@ -8,9 +8,9 @@ def create_journal(user_id, title, summary, introduction, cover_image_url,
     Creates a new journal entry in the Firestore database.
     """
     try:
-        journals_ref = db.collection('journals')
+        journals_ref = db.collection('travelJournals')
         journal_data = {
-            'userId': str(user_id),  # Ensure userId is stored as a string
+            'user_id': str(user_id),  # Ensure user_id is stored as a string
             'title': title,
             'summary': summary,
             'introduction': introduction,
@@ -35,7 +35,7 @@ def get_journal(journal_id):
     Retrieves a specific journal entry from Firestore.
     """
     try:
-        journal_ref = db.collection('journals').document(journal_id)
+        journal_ref = db.collection('travelJournals').document(journal_id)
         journal = journal_ref.get()
         if journal.exists:
             journal_data = journal.to_dict()
@@ -53,8 +53,10 @@ def get_user_journals(user_id):
     Retrieves all journal entries for a specific user, ordered by creation time.
     """
     try:
-        journals_ref = db.collection('journals')
-        query = journals_ref.where('userId', '==', str(user_id))
+        journals_ref = db.collection('travelJournals')
+        query = journals_ref.where('user_id', '==', str(user_id)).order_by(
+            'created_at', direction=firestore.Query.DESCENDING
+        )
         results = query.stream()
 
         journals_list = []
@@ -73,7 +75,7 @@ def get_all_journals():
     Retrieves all journal entries, for debugging purposes.
     """
     try:
-        journals_ref = db.collection('journals')
+        journals_ref = db.collection('travelJournals')
         results = journals_ref.stream()
         journals_list = []
         for doc in results:
@@ -91,7 +93,7 @@ def update_journal(journal_id, data):
     Updates an existing journal entry in Firestore.
     """
     try:
-        journal_ref = db.collection('journals').document(journal_id)
+        journal_ref = db.collection('travelJournals').document(journal_id)
         data['updated_at'] = firestore.SERVER_TIMESTAMP
         journal_ref.update(data)
         return True
@@ -105,7 +107,7 @@ def delete_journal(journal_id):
     Deletes a journal entry from Firestore.
     """
     try:
-        journal_ref = db.collection('journals').document(journal_id)
+        journal_ref = db.collection('travelJournals').document(journal_id)
         journal_ref.delete()
         return True
     except Exception as e:
