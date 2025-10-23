@@ -2,7 +2,10 @@ import os
 import pyrebase
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load environment variables from .env file only in local development
+if 'K_SERVICE' not in os.environ:
+    load_dotenv()
+
 
 def get_firebase_config():
     return {
@@ -16,9 +19,11 @@ def get_firebase_config():
         "databaseURL": ""
     }
 
+
 firebase_config = get_firebase_config()
 firebase = pyrebase.initialize_app(firebase_config)
 auth = firebase.auth()
+
 
 def sign_in_user(email, password):
     try:

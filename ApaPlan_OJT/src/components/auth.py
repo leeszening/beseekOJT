@@ -1,4 +1,5 @@
 import logging
+import traceback
 import uuid
 from firebase_admin import auth, firestore, exceptions, storage
 from firebase_config import db
@@ -77,7 +78,7 @@ def create_user(email, password):
         return {"status": "error", "message": error_message}
     except Exception as e:
         # Handle other unexpected errors
-        logging.error(f"An unexpected error occurred: {e}")
+        logging.error(f"An unexpected error occurred: {e}\n{traceback.format_exc()}")
         return {"status": "error", "message": "UNEXPECTED_ERROR"}
 
 
@@ -93,7 +94,7 @@ def get_user_profile(uid):
         else:
             return {"status": "error", "message": "User not found"}
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logging.error(f"An unexpected error occurred: {e}\n{traceback.format_exc()}")
         return {"status": "error", "message": "UNEXPECTED_ERROR"}
 
 
@@ -160,7 +161,42 @@ def upload_avatar(uid, file_contents, file_name):
         return {"status": "error", "message": "FIREBASE_ERROR"}
     except Exception as e:
         logging.error(f"Unexpected error during avatar upload for user {uid}: {e}")
-        return {"status": "error", "message": "AVATAR_UPLOAD_FAILED"}
+        logging.error(traceback.format_exc())
+        return {"status": "error", "message": f"AVATAR_UPLOAD_FAILED: {e}"}
+
+
+def delete_avatar(uid):
+    """
+    Deletes a user's avatar from Firebase Storage and updates their profile.
+    """
+    try:
+        # Get user profile to find the avatar URL
+        profile_resp = get_user_profile(uid)
+        if profile_resp["status"] != "success":
+            return {"status": "error", "message": "User not found"}
+
+        avatar_url = profile_resp["data"].get("avatar_url")
+        if not avatar_url:
+            return {"status": "success"}  # No avatar to delete
+
+        # Extract the blob path from the URL
+        bucket_name = storage.bucket().name
+        # The path is the part of the URL after the bucket name and the trailing slash
+        blob_name = avatar_url.split(f"{bucket_name}/")[1].split("?")[0]
+
+        bucket = storage.bucket()
+        blob = bucket.blob(blob_name)
+        blob.delete()
+        logging.info(f"Successfully deleted avatar for user {uid} from Storage.")
+
+        # Update user profile to remove the avatar URL
+        update_user_profile(uid, {"avatar_url": ""})
+        logging.info("User profile updated to remove avatar URL.")
+
+        return {"status": "success"}
+    except Exception as e:
+        logging.error(f"Unexpected error during avatar deletion for user {uid}: {e}")
+        return {"status": "error", "message": "AVATAR_DELETE_FAILED"}
 
 
 def update_user_password(uid, new_password):

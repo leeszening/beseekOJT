@@ -8,62 +8,74 @@ from src.components.pyrebase_auth import (
 from src.components.auth import create_user
 from src.shared.auth_utils import handle_auth_error
 
-login_layout = dmc.Center(
-    dmc.Card(
-        [
-            html.H2("Login"),
-            dmc.TextInput(id="email", placeholder="Email"),
-            dmc.PasswordInput(id="password", placeholder="Password"),
-            dmc.Button("Login", id="login_btn", fullWidth=True, mt="sm"),
-            html.Div(id="login_status", className="login-status"),
-            html.Div(
-                [
-                    dmc.Button(
-                        "Forgot Password?",
-                        id="reset_btn",
-                        variant="outline",
-                        size="xs",
-                        mt="sm",
-                    ),
-                    html.Span("  "),
-                    dmc.Button(
-                        "Don't have an account? Sign up",
-                        id="signup_btn",
-                        variant="outline",
-                        size="xs",
-                        mt="sm",
-                    ),
-                ]
-            ),
-            # Signup Modal
-            dmc.Modal(
-                id="signup_modal",
-                title="Sign Up",
-                children=[
-                    dmc.TextInput(id="signup_email", placeholder="Email"),
-                    dmc.PasswordInput(
-                        id="signup_password", placeholder="Password", mt="sm"
-                    ),
-                    dmc.Button("Create Account", id="signup_submit", mt="sm"),
-                    html.Div(id="signup_status", className="login-status")
-                ],
-                centered=True
-            ),
-            # Reset Password Modal
-            dmc.Modal(
-                id="reset_modal",
-                title="Reset Password",
-                children=[
-                    dmc.TextInput(id="reset_email", placeholder="Email"),
-                    dmc.Button("Send Reset Email", id="reset_submit", mt="sm"),
-                    html.Div(id="reset_status", className="login-status")
-                ],
-                centered=True
-            )
-        ],
-        className="login-card"
+
+def login_layout():
+    return dmc.Center(
+        dmc.Card(
+            [
+                html.H2("Login"),
+                dmc.TextInput(id="email", placeholder="Email"),
+                dmc.PasswordInput(id="password", placeholder="Password"),
+                dmc.Button("Login", id="login_btn", fullWidth=True, mt="sm"),
+                html.Div(id="login_status", className="login-status"),
+                html.Div(
+                    [
+                        dmc.Button(
+                            "Forgot Password?",
+                            id="reset_btn",
+                            variant="outline",
+                            size="xs",
+                            mt="sm",
+                        ),
+                        html.Span("  "),
+                        dmc.Button(
+                            "Don't have an account? Sign up",
+                            id="signup_btn",
+                            variant="outline",
+                            size="xs",
+                            mt="sm",
+                        ),
+                    ]
+                ),
+                # Signup Modal
+                dmc.Modal(
+                    id="signup_modal",
+                    title="Sign Up",
+                    children=[
+                        dmc.TextInput(id="signup_email", placeholder="Email"),
+                        dmc.PasswordInput(
+                            id="signup_password",
+                            placeholder="Password",
+                            mt="sm"
+                        ),
+                        dmc.Button(
+                            "Create Account",
+                            id="signup_submit",
+                            mt="sm"
+                        ),
+                        html.Div(id="signup_status", className="login-status")
+                    ],
+                    centered=True
+                ),
+                # Reset Password Modal
+                dmc.Modal(
+                    id="reset_modal",
+                    title="Reset Password",
+                    children=[
+                        dmc.TextInput(id="reset_email", placeholder="Email"),
+                        dmc.Button(
+                            "Send Reset Email",
+                            id="reset_submit",
+                            mt="sm"
+                        ),
+                        html.Div(id="reset_status", className="login-status")
+                    ],
+                    centered=True
+                )
+            ],
+            className="login-card"
+        )
     )
-)
 
 
 def register_login_callbacks(app):

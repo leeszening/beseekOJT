@@ -3,7 +3,8 @@ import dash_mantine_components as dmc
 from dash import html, dcc, Input, Output, State
 from dash.dependencies import ClientsideFunction
 from src.components.auth import (
-    update_user_password, get_user_profile, update_user_profile, upload_avatar
+    update_user_password, get_user_profile, update_user_profile, upload_avatar,
+    delete_avatar
 )
 from src.components.pyrebase_auth import sign_in_user
 from src.shared.auth_utils import handle_auth_error
@@ -39,25 +40,7 @@ def profile_layout():
                         id="profile-view-mode",
                         children=[
                             dmc.Center(
-                                dcc.Upload(
-                                    id='upload-avatar',
-                                    children=html.Div([
-                                        dmc.Avatar(
-                                            id="user-avatar", size="xl", radius="xl"
-                                        )
-                                    ]),
-                                    style={
-                                        'width': '100%',
-                                        'height': '60px',
-                                        'lineHeight': '60px',
-                                        'borderWidth': '1px',
-                                        'borderStyle': 'dashed',
-                                        'borderRadius': '5px',
-                                        'textAlign': 'center',
-                                        'margin': '10px'
-                                    },
-                                    multiple=False
-                                )
+                                dmc.Avatar(id="user-avatar", size="xl", radius="xl")
                             ),
                             dmc.Space(h=20),
                             dmc.Group([
@@ -97,6 +80,35 @@ def profile_layout():
                         id="profile-edit-mode",
                         style={"display": "none"},
                         children=[
+                            dmc.Center(
+                                dmc.Stack(
+                                    align="center",
+                                    gap="sm",
+                                    children=[
+                                        dmc.Avatar(
+                                            id="user-avatar-edit", size="xl", radius="xl"
+                                        ),
+                                        dmc.Group(
+                                            gap="xs",
+                                            children=[
+                                                dcc.Upload(
+                                                    id='upload-avatar',
+                                                    children=dmc.Button("Change", variant="outline", size="xs"),
+                                                    multiple=False,
+                                                ),
+                                                dmc.Button(
+                                                    "Delete",
+                                                    id="delete-avatar-btn",
+                                                    variant="outline",
+                                                    color="red",
+                                                    size="xs"
+                                                ),
+                                            ]
+                                        )
+                                    ]
+                                )
+                            ),
+                            dmc.Space(h=20),
                             dmc.TextInput(label="Username", id="username-input"),
                             dmc.TextInput(label="Display Name", id="display-name-input"),
                             dmc.Button("Save Profile", id="save-profile-btn", mt="md"),
@@ -136,6 +148,7 @@ def profile_layout():
 def register_profile_callbacks(app):
     @app.callback(
         Output("user-avatar", "src"),
+        Output("user-avatar-edit", "src"),
         Output("username-display", "children"),
         Output("display-name-display", "children"),
         Output("user-email-display", "children"),
@@ -146,7 +159,7 @@ def register_profile_callbacks(app):
     )
     def load_user_profile(auth_data):
         if not auth_data or "localId" not in auth_data:
-            return "", "N/A", "N/A", "N/A", "", "", None
+            return "", "", "N/A", "N/A", "N/A", "", "", None
 
         uid = auth_data["localId"]
         profile_resp = get_user_profile(uid)
@@ -161,6 +174,7 @@ def register_profile_callbacks(app):
 
             return (
                 avatar_url,
+                avatar_url,
                 profile.get("username", "N/A"),
                 display_name,
                 profile.get("email", "N/A"),
@@ -169,10 +183,11 @@ def register_profile_callbacks(app):
                 uid
             )
         else:
-            return "", "N/A", "N/A", "N/A", "", "", None
+            return "", "", "N/A", "N/A", "N/A", "", "", None
 
     @app.callback(
         Output("user-avatar", "src", allow_duplicate=True),
+        Output("user-avatar-edit", "src", allow_duplicate=True),
         Output("profile-status", "children", allow_duplicate=True),
         Input("upload-avatar", "contents"),
         State("upload-avatar", "filename"),
@@ -181,7 +196,7 @@ def register_profile_callbacks(app):
     )
     def handle_avatar_upload(contents, filename, uid):
         if not contents:
-            return dash.no_update, dash.no_update
+            return dash.no_update, dash.no_update, dash.no_update
 
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
@@ -189,7 +204,7 @@ def register_profile_callbacks(app):
         upload_resp = upload_avatar(uid, decoded, filename)
 
         if upload_resp["status"] == "success":
-            return upload_resp["data"]["avatar_url"], dmc.Alert(
+            return upload_resp["data"]["avatar_url"], upload_resp["data"]["avatar_url"], dmc.Alert(
                 "Avatar updated successfully!",
                 color="green",
                 withCloseButton=True,
@@ -199,7 +214,31 @@ def register_profile_callbacks(app):
             error_message = "Failed to update avatar."
             if upload_resp["message"] == "UNSUPPORTED_FILE_TYPE":
                 error_message = "Unsupported file type. Please upload a JPG, PNG, or GIF."
-            return dash.no_update, dmc.Alert(error_message, color="red")
+            return dash.no_update, dash.no_update, dmc.Alert(error_message, color="red")
+
+    @app.callback(
+        Output("user-avatar", "src", allow_duplicate=True),
+        Output("user-avatar-edit", "src", allow_duplicate=True),
+        Output("profile-status", "children", allow_duplicate=True),
+        Input("delete-avatar-btn", "n_clicks"),
+        State("profile-uid-store", "data"),
+        prevent_initial_call=True
+    )
+    def handle_avatar_delete(n_clicks, uid):
+        if not n_clicks:
+            return dash.no_update, dash.no_update, dash.no_update
+
+        delete_resp = delete_avatar(uid)
+
+        if delete_resp["status"] == "success":
+            return "", "", dmc.Alert(
+                "Avatar deleted successfully!",
+                color="green",
+                withCloseButton=True,
+                duration=3000
+            )
+        else:
+            return dash.no_update, dash.no_update, dmc.Alert("Failed to delete avatar.", color="red")
 
     @app.callback(
         Output("edit-mode-store", "data"),
@@ -224,6 +263,8 @@ def register_profile_callbacks(app):
     @app.callback(
         Output("profile-status", "children"),
         Output("edit-mode-store", "data", allow_duplicate=True),
+        Output("username-display", "children", allow_duplicate=True),
+        Output("display-name-display", "children", allow_duplicate=True),
         Input("save-profile-btn", "n_clicks"),
         State("username-input", "value"),
         State("display-name-input", "value"),
@@ -232,7 +273,7 @@ def register_profile_callbacks(app):
     )
     def save_user_profile(n_clicks, username, display_name, uid):
         if not uid:
-            return dmc.Alert("Please log in first.", color="yellow"), True
+            return dmc.Alert("Please log in first.", color="yellow"), True, dash.no_update, dash.no_update
         profile_data = {
             "username": username,
             "display_name": display_name,
@@ -240,14 +281,19 @@ def register_profile_callbacks(app):
         update_resp = update_user_profile(uid, profile_data)
 
         if update_resp["status"] == "success":
-            return dmc.Alert(
-                "Profile updated successfully!",
-                color="green",
-                withCloseButton=True,
-                duration=3000
-            ), False
+            return (
+                dmc.Alert(
+                    "Profile updated successfully!",
+                    color="green",
+                    withCloseButton=True,
+                    duration=3000
+                ),
+                False,  # Exit edit mode
+                username,  # Update username display
+                display_name  # Update display name display
+            )
         else:
-            return dmc.Alert("Failed to update profile.", color="red"), True
+            return dmc.Alert("Failed to update profile.", color="red"), True, dash.no_update, dash.no_update
 
     app.clientside_callback(
         ClientsideFunction(

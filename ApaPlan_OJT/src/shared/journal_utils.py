@@ -1,5 +1,8 @@
-from firebase_admin import firestore
+from firebase_admin import firestore, storage
 from firebase_config import db
+import uuid
+import base64
+import mimetypes
 
 
 def create_journal(user_id, title, summary, introduction, cover_image_url,
@@ -8,13 +11,32 @@ def create_journal(user_id, title, summary, introduction, cover_image_url,
     Creates a new journal entry in the Firestore database.
     """
     try:
+        image_url = 'https://via.placeholder.com/150'
+        if cover_image_url and cover_image_url.startswith('data:image'):
+            header, encoded = cover_image_url.split(",", 1)
+            mime_type = header.split(";")[0].split(":")[1]
+            
+            # Guess the extension based on the mime type
+            extension = mimetypes.guess_extension(mime_type)
+            if not extension:
+                extension = '.png'  # Default to .png if detection fails
+            
+            image_data = base64.b64decode(encoded)
+            
+            bucket = storage.bucket()
+            blob = bucket.blob(f"cover_images/{uuid.uuid4()}{extension}")
+            
+            blob.upload_from_string(image_data, content_type=mime_type)
+            blob.make_public()
+            image_url = blob.public_url
+
         journals_ref = db.collection('travelJournals')
         journal_data = {
-            'user_id': str(user_id),  # Ensure user_id is stored as a string
+            'user_id': str(user_id),
             'title': title,
             'summary': summary,
             'introduction': introduction,
-            'cover_image_url': cover_image_url,
+            'cover_image_url': image_url,
             'start_date': start_date,
             'end_date': end_date,
             'total_cost': total_cost,
