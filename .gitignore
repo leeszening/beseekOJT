@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 .venv/
 
 # macOS
 .DS_Store
+=======
+__pycache__/
+.env
+*.pyc
+>>>>>>> 96878d44635d67bab7de5d6d7a63dfba6391d534

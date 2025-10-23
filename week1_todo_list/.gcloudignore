@@ -1,5 +1,0 @@
-# Exclude development environment files
-.venv/
-__pycache__/
-*.log
-# Add any other files/folders here that are not needed for the Docker build

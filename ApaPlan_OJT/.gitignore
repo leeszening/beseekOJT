@@ -1,4 +1,11 @@
-__pycache__/
+# Environments
 .env
+.venv
+venv/
+__pycache__/
+
+# Service account keys
 serviceAccountKey.json
+
+# Python bytecode
 *.pyc
