@@ -6,7 +6,7 @@ import mimetypes
 
 
 def create_journal(user_id, title, summary, introduction, cover_image_url,
-                   start_date, end_date, total_cost, currency, places):
+                   start_date, end_date, total_cost, currency):
     """
     Creates a new journal entry in the Firestore database.
     """
@@ -41,7 +41,6 @@ def create_journal(user_id, title, summary, introduction, cover_image_url,
             'end_date': end_date,
             'total_cost': total_cost,
             'currency': currency,
-            'places': places,
             'created_at': firestore.SERVER_TIMESTAMP,
             'updated_at': firestore.SERVER_TIMESTAMP,
         }
@@ -122,6 +121,64 @@ def update_journal(journal_id, data):
     except Exception as e:
         print(f"An error occurred while updating the journal: {e}")
         return False
+
+
+def add_place(journal_id, user_id, place_data):
+    """
+    Creates a new place document in the 'places' collection.
+    """
+    try:
+        places_ref = db.collection('places')
+        place_data.update({
+            'journal_id': journal_id,
+            'user_id': user_id,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        })
+        place_ref = places_ref.add(place_data)
+        return place_ref[1].id
+    except Exception as e:
+        print(f"An error occurred while adding a place: {e}")
+        return None
+
+
+def get_place(place_id):
+    """
+    Retrieves a specific place from Firestore.
+    """
+    try:
+        place_ref = db.collection('places').document(place_id)
+        place = place_ref.get()
+        if place.exists:
+            place_data = place.to_dict()
+            place_data['id'] = place.id
+            return place_data
+        else:
+            return None
+    except Exception as e:
+        print(f"An error occurred while retrieving the place: {e}")
+        return None
+
+def get_journal_places(journal_id):
+    """
+    Retrieves all places for a specific journal.
+    """
+    try:
+        places_ref = db.collection('places')
+        query = places_ref.where('journal_id', '==', journal_id).order_by(
+            'created_at', direction=firestore.Query.ASCENDING
+        )
+        results = query.stream()
+
+        places_list = []
+        for doc in results:
+            place_data = doc.to_dict()
+            place_data['id'] = doc.id
+            places_list.append(place_data)
+        return places_list
+    except Exception as e:
+        print(f"An error occurred while retrieving journal places: {e}")
+        return []
 
 
 def delete_journal(journal_id):

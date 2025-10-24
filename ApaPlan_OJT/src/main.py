@@ -26,6 +26,9 @@ except ValueError:
         logging.warning("STORAGE_BUCKET environment variable not set. Storage features may not work.")
         firebase_options = {}
     else:
+        # Ensure the bucket name is clean and doesn't contain prefixes
+        if "gs://" in storage_bucket:
+            storage_bucket = storage_bucket.split("gs://")[1]
         firebase_options = {'storageBucket': storage_bucket}
 
     # When running in a Google Cloud environment (like Cloud Run),
@@ -58,6 +61,7 @@ from dotenv import load_dotenv
 from src.pages.login_page import login_layout, register_login_callbacks
 from src.pages.home_page import home_layout, register_home_callbacks
 from src.pages.profile_page import profile_layout, register_profile_callbacks
+from src.pages.journal_detail_page import journal_detail_layout, register_journal_detail_callbacks
 
 # Load env variables for client-side (pyrebase)
 load_dotenv()
@@ -86,6 +90,7 @@ app.layout = dmc.MantineProvider(
 register_login_callbacks(app)
 register_home_callbacks(app)
 register_profile_callbacks(app)
+register_journal_detail_callbacks(app)
 
 
 # --- Logout an user ---
@@ -112,6 +117,9 @@ def display_page(pathname, auth_data):
             return profile_layout()
         elif pathname == '/home':
             return home_layout()
+        elif pathname and pathname.startswith('/journal/'):
+            journal_id = pathname.split('/')[-1]
+            return journal_detail_layout(journal_id)
         else:
             return home_layout()  # Or a 404 page
     else:

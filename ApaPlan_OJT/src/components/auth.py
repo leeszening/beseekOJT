@@ -1,6 +1,5 @@
 import logging
 import traceback
-import uuid
 from firebase_admin import auth, firestore, exceptions, storage
 from firebase_config import db
 
@@ -135,10 +134,11 @@ def upload_avatar(uid, file_contents, file_name):
             logging.warning(f"Unsupported file type for user {uid}: {file_extension}")
             return {"status": "error", "message": "UNSUPPORTED_FILE_TYPE"}
 
-        unique_filename = f"avatars/{uid}/{uuid.uuid4()}.{file_extension}"
-        blob = bucket.blob(unique_filename)
+        # This creates the correct path: "avatars/user_id/filename"
+        blob_path = f"avatars/{uid}/{file_name}"
+        blob = bucket.blob(blob_path)
 
-        logging.info(f"Uploading to Firebase Storage: {unique_filename}")
+        logging.info(f"Uploading to Firebase Storage: {blob_path}")
         blob.upload_from_string(
             file_contents,
             content_type=content_type

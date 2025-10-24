@@ -98,12 +98,6 @@ def create_journal_modal():
                                         grow=True,
                                         style={"margin-top": "1rem"},
                                     ),
-                                    dmc.Text("Places"),
-                                    dmc.JsonInput(
-                                        id="journal-places-input",
-                                        placeholder='e.g., ["Paris", "Rome"]',
-                                        formatOnBlur=True
-                                    ),
                                 ]
                             ),
                         ],
@@ -131,6 +125,7 @@ def home_layout():
             dcc.Store(id='user-info-store', storage_type='session'),
             dcc.Store(id='selected-journal-store', storage_type='session'),
             dcc.Store(id='modal-state-store', data={'opened': False}),
+            dcc.Store(id='journal-update-trigger-store', storage_type='memory'),
             html.Div(id='home-page-content'),
             dmc.Modal(
                 id="journal-details-modal",
@@ -229,7 +224,6 @@ def register_home_callbacks(app):
         Output("journal-date-range-picker", "value"),
         Output("journal-total-cost-input", "value"),
         Output("journal-currency-input", "value"),
-        Output("journal-places-input", "value"),
         Output("upload-image", "contents", allow_duplicate=True),
         Output('output-image-upload', 'children', allow_duplicate=True),
         Input("journal-modal", "opened"),
@@ -237,8 +231,8 @@ def register_home_callbacks(app):
     )
     def clear_modal_inputs(opened):
         if not opened:
-            return "", "", "", None, None, "🇲🇾 MYR", "", None, html.Img(src='https://via.placeholder.com/200x150', style={'width': '100%', 'height': 'auto'})
-        return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update
+            return "", "", "", None, None, "🇲🇾 MYR", None, html.Img(src='https://via.placeholder.com/200x150', style={'width': '100%', 'height': 'auto'})
+        return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update
 
     @app.callback(
         Output('output-image-upload', 'children', allow_duplicate=True),
@@ -251,6 +245,7 @@ def register_home_callbacks(app):
         return html.Img(src='https://via.placeholder.com/200x150', style={'width': '100%', 'height': 'auto'})
 
     @app.callback(
+        Output("journal-update-trigger-store", "data"),
         Output("selected-journal-store", "data"),
         Output("modal-state-store", "data"),
         Output('url', 'href', allow_duplicate=True),
@@ -267,16 +262,18 @@ def register_home_callbacks(app):
             State("journal-date-range-picker", "value"),
             State("journal-total-cost-input", "value"),
             State("journal-currency-input", "value"),
-            State("journal-places-input", "value"),
         ],
         prevent_initial_call=True,
     )
     def save_new_journal(
-        n_clicks, user_info, title, summary, introduction, cover_image_contents,
-        date_range, total_cost, currency, places
+        n_clicks, user_info, title, summary, introduction,
+        cover_image_contents, date_range, total_cost, currency
     ):
         if not n_clicks:
-            return no_update, {'opened': True}, no_update, no_update, no_update, no_update
+            return (
+                no_update, no_update, {'opened': True}, no_update, no_update,
+                no_update, no_update
+            )
 
         title_error = "Title is required." if not title else None
         date_range_error = "Date range is required." if not date_range else None
@@ -284,110 +281,46 @@ def register_home_callbacks(app):
 
         if title_error or date_range_error:
             return (
-                no_update,
-                {'opened': True},
-                no_update,
-                title_error,
-                date_range_error,
-                summary_error,
+                no_update, no_update, {'opened': True}, no_update,
+                title_error, date_range_error, summary_error,
             )
 
         if user_info and 'users' in user_info and user_info['users']:
             user_id = user_info['users'][0]['localId']
             start_date, end_date = date_range
-            places_list = json.loads(places) if places else []
             journal_id = create_journal(
-                user_id, title, summary, introduction, cover_image_contents,
-                start_date, end_date, total_cost, currency, places_list
+                user_id, title, summary, introduction,
+                cover_image_contents, start_date, end_date, total_cost,
+                currency
             )
             if journal_id:
+                # On success, update the trigger store with the new journal ID
                 return (
-                    journal_id,
-                    {'opened': False},
-                    '/home',
-                    None,
-                    None,
-                    None
+                    journal_id, journal_id, {'opened': False}, no_update,
+                    None, None, None
                 )
             else:
+                # On failure, do not trigger a refresh
                 return (
-                    no_update,
-                    {'opened': True},
-                    no_update,
+                    no_update, no_update, {'opened': True}, no_update,
                     "Error", "Failed to create journal.", None
                 )
         
+        # On user error, do not trigger a refresh
         return (
-            no_update,
-            {'opened': True},
-            no_update,
-            "Error", "User not logged in.", None
+            no_update, no_update, {'opened': True}, no_update, "Error",
+            "User not logged in.", None
         )
 
-    @app.callback(
-        Output("journal-details-modal", "opened"),
-        Output("journal-details-modal", "children"),
-        Input({'type': 'view-journal-btn', 'index': ALL}, 'n_clicks'),
-        State("journal-details-modal", "opened"),
-        prevent_initial_call=True,
-    )
-    def open_details_modal(n_clicks, opened):
-        ctx = callback_context
-        if not ctx.triggered:
-            return opened, []
-
-        prop_id = ctx.triggered[0]['prop_id']
-        button_id_str = prop_id.split('.')[0]
-        button_id = json.loads(button_id_str)
-        journal_id = button_id['index']
-        journal = get_journal(journal_id)
-
-        if not journal:
-            return not opened, dmc.Text("Journal not found.")
-
-        created_at = journal.get('created_at')
-        date_str = "N/A"
-        if created_at:
-            date_str = created_at.strftime('%Y-%m-%d')
-
-        modal_content = [
-            dmc.Text(journal.get('title', 'No Title'), fw=500, size="lg"),
-            dmc.Text(
-                f"Created on: {date_str}",
-                size="sm",
-                c="gray"
-            ),
-            dmc.Text(journal.get('summary', ''), style={'marginTop': '1rem'}),
-            dmc.Text(
-                journal.get('introduction', ''),
-                style={'marginTop': '1rem'}
-            ),
-        ]
-        return not opened, modal_content
-
-    @app.callback(
-        Output("selected-journal-store", "data", allow_duplicate=True),
-        Input({'type': 'view-journal-btn', 'index': ALL}, 'n_clicks'),
-        prevent_initial_call=True
-    )
-    def view_journal(n_clicks):
-        ctx = callback_context
-        if not ctx.triggered:
-            return None
-        
-        button_id_str = ctx.triggered[0]['prop_id'].split('.')[0]
-        button_id = json.loads(button_id_str)
-        journal_id = button_id['index']
-        return journal_id
 
     @app.callback(
         Output("journal-list-container", "children"),
         [
             Input('user-info-store', 'data'),
-            Input("save-journal-btn", "n_clicks"),
+            Input('journal-update-trigger-store', 'data'),
         ]
     )
-    def display_journals(user_info, save_clicks):
+    def display_journals(user_info, trigger_data):
         if not (user_info and 'users' in user_info and user_info['users']):
             print("User info not found or invalid.")
             return html.P("Please log in to see your journals.")
@@ -434,17 +367,17 @@ def register_home_callbacks(app):
                         mt="md",
                         mb="xs",
                     ),
-                    dmc.Button(
-                        "View Details",
-                        id={
-                            'type': 'view-journal-btn',
-                            'index': journal.get('id')  # Use .get() for safety
-                        },
-                        variant="light",
-                        color="blue",
-                        fullWidth=True,
-                        mt="md",
-                        radius="md",
+                    dcc.Link(
+                        dmc.Button(
+                            "View Details",
+                            variant="light",
+                            color="blue",
+                            fullWidth=True,
+                            mt="md",
+                            radius="md",
+                        ),
+                        href=f"/journal/{journal.get('id')}",
+                        style={"textDecoration": "none"},
                     ),
                 ],
                 withBorder=True,

@@ -16,6 +16,12 @@ steps:
   - '--platform'
   - 'managed'
   - '--allow-unauthenticated'
+  - '--cpu'
+  - '1'
+  - '--memory'
+  - '1Gi'
+  - '--service-account'
+  - 'firebase-adminsdk-fbsvc@apaplan-6a422.iam.gserviceaccount.com'
   - '--set-secrets=FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest,SECRET_KEY=SECRET_KEY:latest,AUTH_DOMAIN=AUTH_DOMAIN:latest,PROJECT_ID=PROJECT_ID:latest,STORAGE_BUCKET=STORAGE_BUCKET:latest,MESSAGING_SENDER_ID=MESSAGING_SENDER_ID:latest,APP_ID=APP_ID:latest,MEASUREMENT_ID=MEASUREMENT_ID:latest'
 images:
 - 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan'
