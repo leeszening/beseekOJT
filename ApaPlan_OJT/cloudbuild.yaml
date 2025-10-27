@@ -1,6 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan', '.']
+  args: ['build', '--platform', 'linux/amd64', '-t', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan', '.']
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'europe-west1-docker.pkg.dev/apaplan-6a422/apaplan-repo/apaplan']
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
