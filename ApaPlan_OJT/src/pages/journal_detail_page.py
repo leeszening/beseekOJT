@@ -25,32 +25,33 @@ def create_timeline(start_date_str, end_date_str, places=None):
         current_date = start_date + timedelta(days=i)
         day_str = current_date.strftime('%Y-%m-%d')
         day_label = f"Day {i + 1}: {current_date.strftime('%B %d, %Y')}"
-        
+
+        # Filter places for the current day
+        day_places = [
+            p for p in (places or [])
+            if p.get('date', '').split('T')[0] == day_str
+        ]
+
+        # Create the content for the accordion panel
+        if day_places:
+            panel_content = [
+                dmc.Paper(
+                    [
+                        dmc.Text(place.get('name', 'No name'), fw=500),
+                        dmc.Text(place.get('address', 'No address'), size="sm"),
+                        dmc.Text(place.get('notes', ''), size="sm", c="dimmed"),
+                    ],
+                    shadow="xs", p="sm", withBorder=True, mb="sm"
+                ) for place in day_places
+            ]
+        else:
+            panel_content = [dmc.Text("No places for this day.")]
+
         timeline_items.append(
             dmc.AccordionItem(
                 [
                     dmc.AccordionControl(day_label),
-                    dmc.AccordionPanel(
-                        dmc.Stack(
-                            children=[
-                                dmc.Paper(
-                                    [
-                                        dmc.Text(
-                                            place.get('name', 'No name'),
-                                            fw=500),
-                                        dmc.Text(
-                                            place.get(
-                                                'address', 'No address'
-                                            ), size="sm"),
-                                        dmc.Text(
-                                            place.get('notes', ''),
-                                            size="sm", c="dimmed"),
-                                    ],
-                                    shadow="xs", p="sm", withBorder=True
-                                ) for place in places if place.get('date') == day_str
-                            ] if places else []
-                        )
-                    ),
+                    dmc.AccordionPanel(dmc.Stack(children=panel_content)),
                 ],
                 value=f"day-{i+1}"
             )
@@ -277,7 +278,6 @@ def register_journal_detail_callbacks(app):
             Output('update-notification', 'color', allow_duplicate=True),
             Output('places-store', 'data'),
             Output('add-place-modal', 'opened', allow_duplicate=True),
-            Output('timeline-refresh-signal', 'data'),
             Output('place-name-error', 'children'),
             Output('place-address-error', 'children'),
             Output('place-date-error', 'children')
@@ -289,18 +289,17 @@ def register_journal_detail_callbacks(app):
             State('place-address-input', 'value'),
             State('place-date-select', 'value'),
             State('place-notes-input', 'value'),
-            State('places-store', 'data'),
-            State('timeline-refresh-signal', 'data')
+            State('places-store', 'data')
         ],
         prevent_initial_call=True,
     )
     def save_place(
         n_clicks, journal_data, name, address, selected_dates,
-        notes, current_places, refresh_signal
+        notes, current_places
     ):
         if not n_clicks:
             return (
-                no_update, True, 'green', no_update, no_update, no_update,
+                no_update, True, 'green', no_update, no_update,
                 "", "", ""
             )
 
@@ -313,7 +312,7 @@ def register_journal_detail_callbacks(app):
 
         if name_error or address_error or date_error:
             return (
-                no_update, True, "red", no_update, True, no_update,
+                no_update, True, "red", no_update, True,
                 name_error, address_error, date_error
             )
 
@@ -340,20 +339,20 @@ def register_journal_detail_callbacks(app):
                 else:
                     error_message = f"Failed to retrieve new place for {place_date}."
                     return (
-                        no_update, True, "red", no_update, True, no_update,
+                        no_update, True, "red", no_update, True,
                         "", "", error_message
                     )
             else:
                 # Handle failure for individual place addition
                 error_message = f"Failed to add place for {place_date}."
                 return (
-                    no_update, True, "red", no_update, True, no_update,
+                    no_update, True, "red", no_update, True,
                     "", "", error_message
                 )
 
         return (
             "Places added successfully!", False, "green", updated_places,
-            False, refresh_signal + 1, "", "", ""
+            False, "", "", ""
         )
 
     @app.callback(
@@ -408,11 +407,10 @@ def register_journal_detail_callbacks(app):
     @app.callback(
         Output('full-timeline-container', 'children'),
         Input('journal-date-range-picker', 'value'),
-        Input('timeline-refresh-signal', 'data'),
-        State('journal-detail-store', 'data'),
-        State('places-store', 'data')
+        Input('places-store', 'data'),
+        State('journal-detail-store', 'data')
     )
-    def update_full_timeline(date_range, refresh_signal, journal_data, places):
+    def update_full_timeline(date_range, places, journal_data):
         # This callback runs on page load and when dependencies change
         start_date, end_date = (None, None)
         if date_range:

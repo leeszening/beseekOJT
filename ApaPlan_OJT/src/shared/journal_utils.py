@@ -61,6 +61,15 @@ def get_journal(journal_id):
         if journal.exists:
             journal_data = journal.to_dict()
             journal_data['id'] = journal.id
+            # Convert timestamp to string to avoid serialization errors
+            if 'created_at' in journal_data and hasattr(
+                journal_data['created_at'], 'isoformat'
+            ):
+                journal_data['created_at'] = journal_data['created_at'].isoformat()
+            if 'updated_at' in journal_data and hasattr(
+                journal_data['updated_at'], 'isoformat'
+            ):
+                journal_data['updated_at'] = journal_data['updated_at'].isoformat()
             return journal_data
         else:
             return None
@@ -84,6 +93,15 @@ def get_user_journals(user_id):
         for doc in results:
             journal_data = doc.to_dict()
             journal_data['id'] = doc.id
+            # Convert timestamp to string to avoid serialization errors
+            if 'created_at' in journal_data and hasattr(
+                journal_data['created_at'], 'isoformat'
+            ):
+                journal_data['created_at'] = journal_data['created_at'].isoformat()
+            if 'updated_at' in journal_data and hasattr(
+                journal_data['updated_at'], 'isoformat'
+            ):
+                journal_data['updated_at'] = journal_data['updated_at'].isoformat()
             journals_list.append(journal_data)
         return journals_list
     except Exception as e:
@@ -129,14 +147,16 @@ def add_place(journal_id, user_id, place_data):
     """
     try:
         places_ref = db.collection('places')
-        place_data.update({
+        # Work with a copy to avoid modifying the original dict
+        data_to_add = place_data.copy()
+        data_to_add.update({
             'journal_id': journal_id,
             'user_id': user_id,
             'created_at': firestore.SERVER_TIMESTAMP,
             'updated_at': firestore.SERVER_TIMESTAMP,
         })
-        place_ref = places_ref.add(place_data)
-        return place_ref[1].id
+        update_time, place_ref = places_ref.add(data_to_add)
+        return place_ref.id
     except Exception as e:
         print(f"An error occurred while adding a place: {e}")
         return None
@@ -152,6 +172,15 @@ def get_place(place_id):
         if place.exists:
             place_data = place.to_dict()
             place_data['id'] = place.id
+            # Convert timestamp to string to avoid serialization errors
+            if 'created_at' in place_data and hasattr(
+                place_data['created_at'], 'isoformat'
+            ):
+                place_data['created_at'] = place_data['created_at'].isoformat()
+            if 'updated_at' in place_data and hasattr(
+                place_data['updated_at'], 'isoformat'
+            ):
+                place_data['updated_at'] = place_data['updated_at'].isoformat()
             return place_data
         else:
             return None
@@ -174,6 +203,15 @@ def get_journal_places(journal_id):
         for doc in results:
             place_data = doc.to_dict()
             place_data['id'] = doc.id
+            # Convert timestamp to string to avoid serialization errors
+            if 'created_at' in place_data and hasattr(
+                place_data['created_at'], 'isoformat'
+            ):
+                place_data['created_at'] = place_data['created_at'].isoformat()
+            if 'updated_at' in place_data and hasattr(
+                place_data['updated_at'], 'isoformat'
+            ):
+                place_data['updated_at'] = place_data['updated_at'].isoformat()
             places_list.append(place_data)
         return places_list
     except Exception as e:
