@@ -119,7 +119,7 @@ def display_page(pathname, auth_data):
             return home_layout()
         elif pathname and pathname.startswith('/journal/'):
             journal_id = pathname.split('/')[-1]
-            return journal_detail_layout(journal_id)
+            return journal_detail_layout(journal_id, auth_data)
         else:
             return home_layout()  # Or a 404 page
     else:

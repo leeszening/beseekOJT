@@ -1,8 +1,9 @@
 from dash import (
-    html, dcc, Input, Output, State, no_update
+    html, dcc, Input, Output, State, no_update, callback_context
 )
 import dash_mantine_components as dmc
 from src.shared.journal_utils import get_journal, update_journal, add_place, get_journal_places, get_place
+from src.shared.auth_utils import get_user_info
 from src.pages.home_page import get_currency_data
 from datetime import datetime, timedelta
 
@@ -60,7 +61,7 @@ def create_timeline(start_date_str, end_date_str, places=None):
     return dmc.Accordion(children=timeline_items, chevronPosition="left")
 
 
-def journal_detail_layout(journal_id=None):
+def journal_detail_layout(journal_id=None, auth_data=None):
     if not journal_id:
         return html.Div("No journal selected.")
 
@@ -72,10 +73,23 @@ def journal_detail_layout(journal_id=None):
     end_date = journal.get('end_date', '')
     places = get_journal_places(journal_id)
 
+    # Determine if the current user is the author
+    is_author = False
+    if auth_data and 'idToken' in auth_data:
+        user_info = get_user_info(auth_data['idToken'])
+        if user_info and 'users' in user_info and user_info['users']:
+            user_id = user_info['users'][0].get('localId')
+            if user_id == journal.get('user_id'):
+                is_author = True
+
+    # Initial mode is 'view'
+    initial_mode = 'view'
+
     return html.Div([
         dcc.Store(id='journal-detail-store', data=journal),
         dcc.Store(id='places-store', data=places),
         dcc.Store(id='timeline-refresh-signal', data=0),
+        dcc.Store(id='page-mode-store', data={'mode': initial_mode}),
         dmc.Modal(
             id='add-place-modal',
             title="Add a New Place",
@@ -130,59 +144,32 @@ def journal_detail_layout(journal_id=None):
                     span=4
                 ),
                 dmc.GridCol(
-                    [
-                        dmc.TextInput(
-                            id="journal-title-input",
-                            label="Title",
-                            value=journal.get('title', ''),
-                            required=True
-                        ),
-                        dmc.Textarea(
-                            id="journal-summary-input",
-                            label="Summary",
-                            value=journal.get('summary', ''),
-                        ),
-                        dmc.Textarea(
-                            id="journal-introduction-input",
-                            label="Introduction",
-                            value=journal.get('introduction', ''),
-                        ),
-                    ],
+                    html.Div(id='journal-details-content'),
                     span=8
                 ),
             ],
             gutter="xl",
         ),
-        dmc.DatePickerInput(
-            id="journal-date-range-picker",
-            type="range",
-            label="Date Range",
-            value=[start_date, end_date] if start_date and end_date else None,
-            required=True
-        ),
         dmc.Group(
-            [
-                dmc.NumberInput(
-                    id="journal-total-cost-input",
-                    label="Total Cost",
-                    value=journal.get('total_cost'),
-                    min=0,
-                    style={"flex": 1},
+            id='action-buttons-group',
+            children=[
+                dmc.Button(
+                    "Edit",
+                    id="edit-journal-btn",
+                    style={'display': 'block' if is_author else 'none'}
                 ),
-                dmc.Autocomplete(
-                    id="journal-currency-input",
-                    label="Currency",
-                    data=get_currency_data(),
-                    value=journal.get('currency', '🇲🇾 MYR'),
-                    style={"flex": 1},
+                dmc.Button(
+                    "Save Changes",
+                    id="save-journal-changes-btn",
+                    style={'display': 'none'}
                 ),
-            ],
-            grow=True,
-            style={"margin-top": "1rem"},
-        ),
-        dmc.Group(
-            [
-                dmc.Button("Save Changes", id="save-journal-changes-btn"),
+                dmc.Button(
+                    "Cancel",
+                    id="cancel-edit-btn",
+                    color="gray",
+                    variant="outline",
+                    style={'display': 'none'}
+                ),
             ],
             justify="flex-end",
             style={"marginTop": "1rem"},
@@ -191,7 +178,12 @@ def journal_detail_layout(journal_id=None):
         dmc.Group(
             [
                 html.H2("Timeline", style={"flex": 1}),
-                dmc.Button("Add Place", id="add-place-btn", variant="outline"),
+                dmc.Button(
+                    "Add Place",
+                    id="add-place-btn",
+                    variant="outline",
+                    style={'display': 'none'}
+                ),
             ],
             justify="space-between",
             align="center"
@@ -209,6 +201,116 @@ def journal_detail_layout(journal_id=None):
 
 
 def register_journal_detail_callbacks(app):
+    @app.callback(
+        Output('journal-details-content', 'children'),
+        Input('page-mode-store', 'data'),
+        State('journal-detail-store', 'data')
+    )
+    def display_journal_details(mode_data, journal):
+        mode = mode_data.get('mode', 'view')
+        start_date = journal.get('start_date', '')
+        end_date = journal.get('end_date', '')
+
+        if mode == 'edit':
+            return [
+                dmc.TextInput(
+                    id="journal-title-input",
+                    label="Title",
+                    value=journal.get('title', ''),
+                    required=True,
+                ),
+                dmc.Textarea(
+                    id="journal-summary-input",
+                    label="Summary",
+                    value=journal.get('summary', ''),
+                ),
+                dmc.Textarea(
+                    id="journal-introduction-input",
+                    label="Introduction",
+                    value=journal.get('introduction', ''),
+                ),
+                dmc.DatePickerInput(
+                    id="journal-date-range-picker",
+                    type="range",
+                    label="Date Range",
+                    value=[start_date, end_date] if start_date and end_date else None,
+                    required=True
+                ),
+                dmc.Group(
+                    [
+                        dmc.NumberInput(
+                            id="journal-total-cost-input",
+                            label="Total Cost",
+                            value=journal.get('total_cost'),
+                            min=0,
+                            style={"flex": 1},
+                        ),
+                        dmc.Autocomplete(
+                            id="journal-currency-input",
+                            label="Currency",
+                            data=get_currency_data(),
+                            value=journal.get('currency', '🇲🇾 MYR'),
+                            style={"flex": 1},
+                        ),
+                    ],
+                    grow=True,
+                    style={"margin-top": "1rem"},
+                ),
+            ]
+        else:  # view mode
+            start_date = journal.get('start_date', '')
+            end_date = journal.get('end_date', '')
+            return [
+                dmc.Text(journal.get('title', 'No Title'), size="xl", weight=700),
+                dmc.Text(journal.get('summary', ''), size="md", color="gray"),
+                html.Hr(),
+                dmc.Text(journal.get('introduction', '')),
+                html.Hr(),
+                dmc.Group([
+                    dmc.Text("Date Range:", weight=500),
+                    dmc.Text(f"{start_date.split('T')[0]} to {end_date.split('T')[0]}" if start_date and end_date else "Not set")
+                ]),
+                dmc.Group([
+                    dmc.Text("Total Cost:", weight=500),
+                    dmc.Text(f"{journal.get('total_cost', 'N/A')} {journal.get('currency', '')}")
+                ]),
+            ]
+
+    @app.callback(
+        [
+            Output('edit-journal-btn', 'style'),
+            Output('save-journal-changes-btn', 'style'),
+            Output('cancel-edit-btn', 'style'),
+            Output('add-place-btn', 'style'),
+            Output('page-mode-store', 'data')
+        ],
+        [
+            Input('edit-journal-btn', 'n_clicks'),
+            Input('cancel-edit-btn', 'n_clicks'),
+            Input('save-journal-changes-btn', 'n_clicks')
+        ],
+        [
+            State('page-mode-store', 'data'),
+            State('edit-journal-btn', 'style')
+        ],
+        prevent_initial_call=True
+    )
+    def toggle_edit_mode(edit_clicks, cancel_clicks, save_clicks, mode_data, edit_btn_style):
+        ctx = callback_context
+        button_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+
+        mode = mode_data.get('mode', 'view')
+        
+        if button_id == 'edit-journal-btn' and mode == 'view':
+            # Switch to edit mode
+            return {'display': 'none'}, {'display': 'block'}, {'display': 'block'}, {'display': 'block'}, {'mode': 'edit'}
+        
+        if button_id in ['cancel-edit-btn', 'save-journal-changes-btn'] and mode == 'edit':
+            # Switch back to view mode
+            return edit_btn_style, {'display': 'none'}, {'display': 'none'}, {'display': 'none'}, {'mode': 'view'}
+
+        return no_update
+
     @app.callback(
         Output('place-date-select', 'children'),
         Input('journal-date-range-picker', 'value'),

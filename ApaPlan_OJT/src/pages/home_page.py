@@ -171,7 +171,7 @@ def register_home_callbacks(app):
                     children=[
                         dmc.AccordionItem(
                             [
-                                dmc.AccordionControl("All Journals"),
+                                dmc.AccordionControl("My Journals"),
                                 dmc.AccordionPanel(
                                     html.Div(id="journal-list-container")
                                 ),
