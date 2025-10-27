@@ -2,16 +2,19 @@ from dash import (
     html, dcc, Input, Output, State, no_update, callback_context
 )
 import dash_mantine_components as dmc
-from src.shared.journal_utils import get_journal, update_journal, add_place, get_journal_places, get_place
+from src.shared.journal_utils import get_journal, update_journal, add_place
 from src.shared.auth_utils import get_user_info
-from src.pages.home_page import get_currency_data
 from datetime import datetime, timedelta
+from src.shared.journal_utils import get_currency_data
+
 
 def create_timeline(start_date_str, end_date_str, places=None):
     """Generates a timeline accordion based on the date range."""
     try:
-        start_date = datetime.strptime(start_date_str.split('T')[0], '%Y-%m-%d')
-        end_date = datetime.strptime(end_date_str.split('T')[0], '%Y-%m-%d')
+        start_date = datetime.strptime(
+            start_date_str.split('T')[0], '%Y-%m-%d')
+        end_date = datetime.strptime(
+            end_date_str.split('T')[0], '%Y-%m-%d')
     except (ValueError, AttributeError):
         return dmc.Text("Invalid date format provided.", c="red")
 
@@ -61,7 +64,7 @@ def create_timeline(start_date_str, end_date_str, places=None):
     return dmc.Accordion(children=timeline_items, chevronPosition="left")
 
 
-def journal_detail_layout(journal_id=None, auth_data=None):
+def journal_detail_layout(journal_id=None, auth_data=None, mode='view'):
     if not journal_id:
         return html.Div("No journal selected.")
 
@@ -69,23 +72,23 @@ def journal_detail_layout(journal_id=None, auth_data=None):
     if not journal:
         return html.Div("Journal not found.")
 
-    start_date = journal.get('start_date', '')
-    end_date = journal.get('end_date', '')
-    places = get_journal_places(journal_id)
+    places = journal.get('journalPlaces', [])
 
     # Determine if the current user is the author
     is_author = False
     if auth_data and 'idToken' in auth_data:
         user_info = get_user_info(auth_data['idToken'])
-        if user_info and 'users' in user_info and user_info['users']:
-            user_id = user_info['users'][0].get('localId')
+        if user_info:
+            user_id = user_info.uid
             if user_id == journal.get('user_id'):
                 is_author = True
 
-    # Initial mode is 'view'
-    initial_mode = 'view'
+    initial_mode = mode
 
     return html.Div([
+        dcc.Store(id='auth-data', data=auth_data),
+        dcc.Store(id='redirect-store'),
+        dcc.Store(id='update-success-signal', data=None),
         dcc.Store(id='journal-detail-store', data=journal),
         dcc.Store(id='places-store', data=places),
         dcc.Store(id='timeline-refresh-signal', data=0),
@@ -150,39 +153,17 @@ def journal_detail_layout(journal_id=None, auth_data=None):
             ],
             gutter="xl",
         ),
-        dmc.Group(
-            id='action-buttons-group',
-            children=[
-                dmc.Button(
-                    "Edit",
-                    id="edit-journal-btn",
-                    style={'display': 'block' if is_author else 'none'}
-                ),
-                dmc.Button(
-                    "Save Changes",
-                    id="save-journal-changes-btn",
-                    style={'display': 'none'}
-                ),
-                dmc.Button(
-                    "Cancel",
-                    id="cancel-edit-btn",
-                    color="gray",
-                    variant="outline",
-                    style={'display': 'none'}
-                ),
-            ],
-            justify="flex-end",
-            style={"marginTop": "1rem"},
-        ),
         html.Hr(style={"margin": "2rem 0"}),
         dmc.Group(
             [
                 html.H2("Timeline", style={"flex": 1}),
-                dmc.Button(
-                    "Add Place",
-                    id="add-place-btn",
-                    variant="outline",
-                    style={'display': 'none'}
+                html.Div(
+                    dmc.Button(
+                        "Add Place",
+                        id="add-place-btn",
+                        variant="outline",
+                    ),
+                    id='add-place-button-container',
                 ),
             ],
             justify="space-between",
@@ -196,7 +177,34 @@ def journal_detail_layout(journal_id=None, auth_data=None):
             withCloseButton=True,
             hide=True,
         ),
-        html.Div(id='full-timeline-container')  # This will be populated by a callback
+        html.Div(id='full-timeline-container'),  # Populated by callback
+        dmc.Group(
+            id='action-buttons-group',
+            children=[
+                dmc.Button(
+                    "Edit",
+                    id="edit-journal-btn",
+                    style={'display': 'block'
+                           if is_author and initial_mode == 'view' else 'none'}
+                ),
+                dmc.Button(
+                    "Save Changes",
+                    id="save-journal-changes-btn",
+                    style={'display': 'block'
+                           if is_author and initial_mode == 'edit' else 'none'}
+                ),
+                dmc.Button(
+                    "Cancel",
+                    id="cancel-edit-btn",
+                    color="gray",
+                    variant="outline",
+                    style={'display': 'block'
+                           if is_author and initial_mode == 'edit' else 'none'}
+                ),
+            ],
+            justify="flex-end",
+            style={"marginTop": "1rem"},
+        ),
     ], style={"padding": "2rem"})
 
 
@@ -233,7 +241,8 @@ def register_journal_detail_callbacks(app):
                     id="journal-date-range-picker",
                     type="range",
                     label="Date Range",
-                    value=[start_date, end_date] if start_date and end_date else None,
+                    value=[start_date, end_date]
+                    if start_date and end_date else None,
                     required=True
                 ),
                 dmc.Group(
@@ -261,71 +270,110 @@ def register_journal_detail_callbacks(app):
             start_date = journal.get('start_date', '')
             end_date = journal.get('end_date', '')
             return [
-                dmc.Text(journal.get('title', 'No Title'), size="xl", weight=700),
-                dmc.Text(journal.get('summary', ''), size="md", color="gray"),
+                dmc.Text(journal.get('title', 'No Title'), size="xl", fw=700),
+                dmc.Text(journal.get('summary', ''), size="md", c="gray"),
                 html.Hr(),
                 dmc.Text(journal.get('introduction', '')),
                 html.Hr(),
                 dmc.Group([
-                    dmc.Text("Date Range:", weight=500),
-                    dmc.Text(f"{start_date.split('T')[0]} to {end_date.split('T')[0]}" if start_date and end_date else "Not set")
+                    dmc.Text("Date Range:", fw=500),
+                    dmc.Text(
+                        f"{start_date.split('T')[0]} to "
+                        f"{end_date.split('T')[0]}"
+                        if start_date and end_date else "Not set"
+                    )
                 ]),
                 dmc.Group([
-                    dmc.Text("Total Cost:", weight=500),
-                    dmc.Text(f"{journal.get('total_cost', 'N/A')} {journal.get('currency', '')}")
+                    dmc.Text("Total Cost:", fw=500),
+                    dmc.Text(
+                        f"{journal.get('total_cost', 'N/A')} "
+                        f"{journal.get('currency', '')}"
+                    )
                 ]),
             ]
 
     @app.callback(
-        [
-            Output('edit-journal-btn', 'style'),
-            Output('save-journal-changes-btn', 'style'),
-            Output('cancel-edit-btn', 'style'),
-            Output('add-place-btn', 'style'),
-            Output('page-mode-store', 'data')
-        ],
-        [
-            Input('edit-journal-btn', 'n_clicks'),
-            Input('cancel-edit-btn', 'n_clicks'),
-            Input('save-journal-changes-btn', 'n_clicks')
-        ],
-        [
-            State('page-mode-store', 'data'),
-            State('edit-journal-btn', 'style')
-        ],
+        Output('page-mode-store', 'data'),
+        Output('action-buttons-group', 'children'),
+        Input('edit-journal-btn', 'n_clicks'),
+        Input('cancel-edit-btn', 'n_clicks'),
+        Input('save-journal-changes-btn', 'n_clicks'),
+        State('page-mode-store', 'data'),
+        State('auth-data', 'data'),
+        State('journal-detail-store', 'data'),
         prevent_initial_call=True
     )
-    def toggle_edit_mode(edit_clicks, cancel_clicks, save_clicks, mode_data, edit_btn_style):
+    def toggle_edit_mode(
+        edit_clicks, cancel_clicks, save_clicks, mode_data, auth_data, journal
+    ):
         ctx = callback_context
-        button_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+        is_author = False
+        if auth_data and 'idToken' in auth_data:
+            user_info = get_user_info(auth_data['idToken'])
+            if user_info and user_info.uid == journal.get('user_id'):
+                is_author = True
 
         mode = mode_data.get('mode', 'view')
-        
-        if button_id == 'edit-journal-btn' and mode == 'view':
-            # Switch to edit mode
-            return {'display': 'none'}, {'display': 'block'}, {'display': 'block'}, {'display': 'block'}, {'mode': 'edit'}
-        
-        if button_id in ['cancel-edit-btn', 'save-journal-changes-btn'] and mode == 'edit':
-            # Switch back to view mode
-            return edit_btn_style, {'display': 'none'}, {'display': 'none'}, {'display': 'none'}, {'mode': 'view'}
 
-        return no_update
+        if button_id == 'edit-journal-btn' and is_author:
+            mode = 'edit'
+        elif button_id in ['cancel-edit-btn', 'save-journal-changes-btn']:
+            mode = 'view'
+
+        action_buttons = [
+            dmc.Button(
+                "Edit",
+                id="edit-journal-btn",
+                style={'display': 'block'
+                       if is_author and mode == 'view' else 'none'}
+            ),
+            dmc.Button(
+                "Save Changes",
+                id="save-journal-changes-btn",
+                style={'display': 'block'
+                       if is_author and mode == 'edit' else 'none'}
+            ),
+            dmc.Button(
+                "Cancel",
+                id="cancel-edit-btn",
+                color="gray",
+                variant="outline",
+                style={'display': 'block'
+                       if is_author and mode == 'edit' else 'none'}
+            ),
+        ]
+
+        return {'mode': mode}, action_buttons
+
+    @app.callback(
+        Output('add-place-button-container', 'style'),
+        Input('page-mode-store', 'data'),
+        State('auth-data', 'data'),
+        State('journal-detail-store', 'data')
+    )
+    def toggle_add_place_button_visibility(mode_data, auth_data, journal):
+        mode = mode_data.get('mode', 'view')
+        is_author = False
+        if auth_data and 'idToken' in auth_data:
+            user_info = get_user_info(auth_data['idToken'])
+            if user_info and user_info.uid == journal.get('user_id'):
+                is_author = True
+
+        if is_author and mode == 'edit':
+            return {'display': 'block'}
+        return {'display': 'none'}
 
     @app.callback(
         Output('place-date-select', 'children'),
-        Input('journal-date-range-picker', 'value'),
         Input('add-place-btn', 'n_clicks'),
         State('journal-detail-store', 'data'),
         prevent_initial_call=True,
     )
-    def populate_date_dropdown(date_range, n_clicks, journal_data):
-        start_date_str, end_date_str = None, None
-
-        if date_range:
-            start_date_str, end_date_str = date_range
-        elif journal_data:
-            start_date_str = journal_data.get('start_date')
-            end_date_str = journal_data.get('end_date')
+    def populate_date_dropdown(n_clicks, journal_data):
+        start_date_str = journal_data.get('start_date')
+        end_date_str = journal_data.get('end_date')
 
         if not start_date_str or not end_date_str:
             return []
@@ -396,30 +444,24 @@ def register_journal_detail_callbacks(app):
         prevent_initial_call=True,
     )
     def save_place(
-        n_clicks, journal_data, name, address, selected_dates,
-        notes, current_places
+        n_clicks, journal_data, name, address, selected_dates, notes,
+        current_places
     ):
         if not n_clicks:
-            return (
-                no_update, True, 'green', no_update, no_update,
-                "", "", ""
-            )
+            return no_update, True, 'green', no_update, no_update, "", "", ""
 
         journal_id = journal_data.get('id')
-        user_id = journal_data.get('user_id')
-
         name_error = "Place Name is required." if not name else ""
         address_error = "Address is required." if not address else ""
-        date_error = "Please select at least one day." if not selected_dates else ""
+        date_error = "Please select at least one day." \
+            if not selected_dates else ""
 
         if name_error or address_error or date_error:
             return (
-                no_update, True, "red", no_update, True,
-                name_error, address_error, date_error
+                no_update, True, "red", no_update, True, name_error,
+                address_error, date_error
             )
 
-        updated_places = list(current_places)
-        
         # If 'To be arranged' is selected, treat it as the only selection
         if "To be arranged" in selected_dates:
             dates_to_process = ["To be arranged"]
@@ -433,24 +475,19 @@ def register_journal_detail_callbacks(app):
                 'date': place_date,
                 'notes': notes,
             }
-            place_id = add_place(journal_id, user_id, place_data)
-            if place_id:
-                new_place = get_place(place_id)
-                if new_place:
-                    updated_places.append(new_place)
-                else:
-                    error_message = f"Failed to retrieve new place for {place_date}."
-                    return (
-                        no_update, True, "red", no_update, True,
-                        "", "", error_message
-                    )
-            else:
-                # Handle failure for individual place addition
+            place_id = add_place(journal_id, place_data)
+            if not place_id:
                 error_message = f"Failed to add place for {place_date}."
                 return (
                     no_update, True, "red", no_update, True,
                     "", "", error_message
                 )
+
+        # After successfully adding all places, refetch the journal to get the
+        # updated places list
+        fresh_journal = get_journal(journal_id)
+        updated_places = fresh_journal.get('journalPlaces', []) if \
+            fresh_journal else current_places
 
         return (
             "Places added successfully!", False, "green", updated_places,
@@ -462,6 +499,8 @@ def register_journal_detail_callbacks(app):
             Output("update-notification", "children", allow_duplicate=True),
             Output("update-notification", "hide", allow_duplicate=True),
             Output("update-notification", "color", allow_duplicate=True),
+            Output('journal-detail-store', 'data'),
+            Output('places-store', 'data', allow_duplicate=True),
         ],
         Input("save-journal-changes-btn", "n_clicks"),
         [
@@ -480,11 +519,12 @@ def register_journal_detail_callbacks(app):
         total_cost, currency
     ):
         if not n_clicks:
-            return no_update, True, "green"
+            return no_update, True, "green", no_update, no_update
 
         journal_id = journal_data.get('id')
         if not journal_id:
-            return "Error: Journal ID not found.", False, "red"
+            msg = "Error: Journal ID not found."
+            return msg, False, "red", no_update, no_update
 
         start_date, end_date = (None, None)
         if date_range:
@@ -501,33 +541,40 @@ def register_journal_detail_callbacks(app):
         }
 
         if update_journal(journal_id, updated_data):
-            return "Journal updated successfully!", False, "green"
+            # Refetch data to ensure UI is in sync
+            fresh_journal = get_journal(journal_id)
+            if fresh_journal:
+                updated_places = fresh_journal.get('journalPlaces', [])
+                return (
+                    "Journal updated successfully!", False, "green", fresh_journal,
+                    updated_places
+                )
+            else:
+                # Handle case where refetch fails
+                msg = "Update succeeded, but failed to refetch data."
+                return msg, False, "orange", no_update, no_update
         else:
-            return "Failed to update journal.", False, "red"
-
+            return "Failed to update journal.", False, "red", no_update, \
+                no_update
 
     @app.callback(
         Output('full-timeline-container', 'children'),
-        Input('journal-date-range-picker', 'value'),
-        Input('places-store', 'data'),
-        State('journal-detail-store', 'data')
+        [Input('places-store', 'data'), Input('journal-detail-store', 'data')]
     )
-    def update_full_timeline(date_range, places, journal_data):
+    def update_full_timeline(places, journal_data):
         # This callback runs on page load and when dependencies change
-        start_date, end_date = (None, None)
-        if date_range:
-            start_date, end_date = date_range
-        else:
-            start_date = journal_data.get('start_date')
-            end_date = journal_data.get('end_date')
+        start_date = journal_data.get('start_date')
+        end_date = journal_data.get('end_date')
 
         if not all([start_date, end_date]):
-            return dmc.Text(
-                "Please set a date range for the journal.", c="orange"
-            )
+            return dmc.Text("Please set a date range for the journal.", c="orange")
 
-        tba_places = [p for p in places if p.get('date') == 'To be arranged']
-        dated_places = [p for p in places if p.get('date') != 'To be arranged']
+        tba_places = [
+            p for p in places if p.get('date') == 'To be arranged'
+        ]
+        dated_places = [
+            p for p in places if p.get('date') != 'To be arranged'
+        ]
 
         tba_section = dmc.Accordion(
             chevronPosition="left",
@@ -542,8 +589,7 @@ def register_journal_detail_callbacks(app):
                                         [
                                             dmc.Text(
                                                 place.get('name', 'No name'),
-                                                fw=500
-                                            ),
+                                                fw=500),
                                             dmc.Text(
                                                 place.get(
                                                     'address', 'No address'
@@ -554,7 +600,9 @@ def register_journal_detail_callbacks(app):
                                         ],
                                         shadow="xs", p="sm", withBorder=True
                                     ) for place in tba_places
-                                ] if tba_places else [dmc.Text("No places yet.")]
+                                ] if tba_places else [
+                                    dmc.Text("No places yet.")
+                                ]
                             )
                         ),
                     ],
@@ -564,7 +612,9 @@ def register_journal_detail_callbacks(app):
             value="tba"  # Keep it open by default
         )
 
-        dated_timeline = create_timeline(start_date, end_date, dated_places)
+        dated_timeline = create_timeline(
+            start_date, end_date, dated_places
+        )
 
         return html.Div([
             tba_section,

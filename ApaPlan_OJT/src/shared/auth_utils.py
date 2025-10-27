@@ -1,16 +1,15 @@
 import re
-import requests
-import os
-
-API_KEY = os.getenv("FIREBASE_WEB_API_KEY")
+from firebase_admin import auth
 
 def get_user_info(id_token):
     """Fetches user information from Firebase Auth."""
-    url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    data = {"idToken": id_token}
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        user = auth.get_user(uid)
+        return user
+    except Exception:
+        return None
 
 def handle_auth_error(error_message):
     """

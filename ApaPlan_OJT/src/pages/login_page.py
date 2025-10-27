@@ -144,11 +144,6 @@ def register_login_callbacks(app):
             return dmc.Alert(
                 message, title="Error", color="yellow", withCloseButton=True
             )
-        if len(password) < 8:
-            message = "🔑 Your password must be at least 8 characters long."
-            return dmc.Alert(
-                message, title="Error", color="yellow", withCloseButton=True
-            )
 
         resp = create_user(email, password)
 

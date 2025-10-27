@@ -65,7 +65,6 @@ from src.pages.journal_detail_page import journal_detail_layout, register_journa
 
 # Load env variables for client-side (pyrebase)
 load_dotenv()
-API_KEY = os.getenv("FIREBASE_WEB_API_KEY")
 
 
 # --- Flask server ---
@@ -118,8 +117,14 @@ def display_page(pathname, auth_data):
         elif pathname == '/home':
             return home_layout()
         elif pathname and pathname.startswith('/journal/'):
-            journal_id = pathname.split('/')[-1]
-            return journal_detail_layout(journal_id, auth_data)
+            parts = pathname.split('/')
+            if len(parts) == 4:
+                journal_id = parts[2]
+                mode = parts[3]
+                return journal_detail_layout(journal_id, auth_data, mode)
+            elif len(parts) == 3:
+                journal_id = parts[2]
+                return journal_detail_layout(journal_id, auth_data, 'view')
         else:
             return home_layout()  # Or a 404 page
     else:

@@ -7,24 +7,7 @@ from src.shared.journal_utils import (
     create_journal, get_user_journals, get_journal
 )
 import json
-import pycountry
-
-
-def get_currency_data():
-    currency_data = []
-    for country in pycountry.countries:
-        try:
-            currency = pycountry.currencies.get(numeric=country.numeric)
-            if currency:
-                # The 'flag' attribute was removed in pycountry 23.12.11.
-                # This is the new recommended way to get the flag emoji.
-                flag = "".join(
-                    chr(ord(c.lower()) + 127397) for c in country.alpha_2
-                )
-                currency_data.append(f"{flag} {currency.alpha_3}")
-        except (AttributeError, KeyError):
-            continue
-    return sorted(list(set(currency_data)))
+import logging
 
 
 def create_journal_modal():
@@ -67,44 +50,6 @@ def create_journal_modal():
                     required=True
                 ),
             ], style={"margin-top": "1rem"}),
-            dmc.Accordion(
-                children=[
-                    dmc.AccordionItem(
-                        [
-                            dmc.AccordionControl("Other Details"),
-                            dmc.AccordionPanel(
-                                children=[
-                                    dmc.Text("Summary"),
-                                    dmc.Textarea(id="journal-summary-input"),
-                                    dmc.Text("Introduction"),
-                                    dmc.Textarea(id="journal-introduction-input"),
-                                    dmc.Group(
-                                        [
-                                            dmc.NumberInput(
-                                                id="journal-total-cost-input",
-                                                label="Total Cost",
-                                                min=0,
-                                                style={"flex": 1},
-                                            ),
-                                            dmc.Autocomplete(
-                                                id="journal-currency-input",
-                                                label="Currency",
-                                                data=get_currency_data(),
-                                                value="🇲🇾 MYR",
-                                                style={"flex": 1},
-                                                styles={"dropdown": {"zIndex": 10001}},
-                                            ),
-                                        ],
-                                        grow=True,
-                                        style={"margin-top": "1rem"},
-                                    ),
-                                ]
-                            ),
-                        ],
-                        value="other-details"
-                    )
-                ]
-            ),
             dmc.Group(
                 [
                     dmc.Button(
@@ -142,13 +87,14 @@ def register_home_callbacks(app):
         Input('auth-store', 'data')
     )
     def store_user_info(auth_data):
-        print("store_user_info callback triggered.")
         if auth_data and 'idToken' in auth_data:
-            print("Auth data found, fetching user info...")
             user_info = get_user_info(auth_data['idToken'])
-            print("User info received:", user_info)
-            return user_info
-        print("Auth data not found or invalid in store_user_info.")
+            if user_info:
+                return {
+                    'uid': user_info.uid,
+                    'display_name': user_info.display_name,
+                    'email': user_info.email,
+                }
         return None
 
     @app.callback(
@@ -156,8 +102,8 @@ def register_home_callbacks(app):
         Input('user-info-store', 'data')
     )
     def update_home_page_content(user_info):
-        if user_info and 'users' in user_info and user_info['users']:
-            display_name = user_info['users'][0].get('displayName', 'User')
+        if user_info:
+            display_name = user_info.get('display_name', 'User')
             return html.Div([
                 html.H1(f"Welcome, {display_name}!"),
                 create_journal_modal(),
@@ -219,11 +165,7 @@ def register_home_callbacks(app):
 
     @app.callback(
         Output("journal-title-input", "value"),
-        Output("journal-summary-input", "value"),
-        Output("journal-introduction-input", "value"),
         Output("journal-date-range-picker", "value"),
-        Output("journal-total-cost-input", "value"),
-        Output("journal-currency-input", "value"),
         Output("upload-image", "contents", allow_duplicate=True),
         Output('output-image-upload', 'children', allow_duplicate=True),
         Input("journal-modal", "opened"),
@@ -231,8 +173,8 @@ def register_home_callbacks(app):
     )
     def clear_modal_inputs(opened):
         if not opened:
-            return "", "", "", None, None, "🇲🇾 MYR", None, html.Img(src='https://via.placeholder.com/200x150', style={'width': '100%', 'height': 'auto'})
-        return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update
+            return "", None, None, html.Img(src='https://via.placeholder.com/200x150', style={'width': '100%', 'height': 'auto'})
+        return no_update, no_update, no_update, no_update
 
     @app.callback(
         Output('output-image-upload', 'children', allow_duplicate=True),
@@ -248,68 +190,61 @@ def register_home_callbacks(app):
         Output("journal-update-trigger-store", "data"),
         Output("selected-journal-store", "data"),
         Output("modal-state-store", "data"),
-        Output('url', 'href', allow_duplicate=True),
+        Output('url', 'pathname', allow_duplicate=True),
         Output("journal-title-input", "error"),
         Output("journal-date-range-picker", "error"),
-        Output("journal-summary-input", "error"),
         Input("save-journal-btn", "n_clicks"),
         [
             State("user-info-store", "data"),
             State("journal-title-input", "value"),
-            State("journal-summary-input", "value"),
-            State("journal-introduction-input", "value"),
             State("upload-image", "contents"),
             State("journal-date-range-picker", "value"),
-            State("journal-total-cost-input", "value"),
-            State("journal-currency-input", "value"),
         ],
         prevent_initial_call=True,
     )
     def save_new_journal(
-        n_clicks, user_info, title, summary, introduction,
-        cover_image_contents, date_range, total_cost, currency
+        n_clicks, user_info, title, cover_image_contents, date_range
     ):
         if not n_clicks:
             return (
                 no_update, no_update, {'opened': True}, no_update, no_update,
-                no_update, no_update
+                no_update
             )
 
         title_error = "Title is required." if not title else None
         date_range_error = "Date range is required." if not date_range else None
-        summary_error = None
 
         if title_error or date_range_error:
             return (
                 no_update, no_update, {'opened': True}, no_update,
-                title_error, date_range_error, summary_error,
+                title_error, date_range_error
             )
 
-        if user_info and 'users' in user_info and user_info['users']:
-            user_id = user_info['users'][0]['localId']
+        if user_info:
+            user_id = user_info['uid']
             start_date, end_date = date_range
             journal_id = create_journal(
-                user_id, title, summary, introduction,
-                cover_image_contents, start_date, end_date, total_cost,
-                currency
+                user_id, title, None, None,
+                cover_image_contents, start_date, end_date, None,
+                None
             )
             if journal_id:
-                # On success, update the trigger store with the new journal ID
+                # On success, redirect to the new journal's page
                 return (
-                    journal_id, journal_id, {'opened': False}, no_update,
-                    None, None, None
+                    journal_id, journal_id, {'opened': False}, f"/journal/{journal_id}/edit",
+                    None, None
                 )
             else:
                 # On failure, do not trigger a refresh
                 return (
                     no_update, no_update, {'opened': True}, no_update,
-                    "Error", "Failed to create journal.", None
+                    "Error", "Failed to create journal."
                 )
         
         # On user error, do not trigger a refresh
         return (
             no_update, no_update, {'opened': True}, no_update, "Error",
-            "User not logged in.", None
+            "User not logged in."
         )
 
 
@@ -321,17 +256,12 @@ def register_home_callbacks(app):
         ]
     )
     def display_journals(user_info, trigger_data):
-        if not (user_info and 'users' in user_info and user_info['users']):
-            print("User info not found or invalid.")
+        if not user_info:
             return html.P("Please log in to see your journals.")
 
-        print("User Info:", user_info)
-        user_id = user_info['users'][0]['localId']
-        print("Querying journals for user ID:", user_id)
+        user_id = user_info['uid']
         journals = get_user_journals(user_id)
-        print("Journals found:", journals)
-        print(f"User ID from auth: {user_id}")
-        print(f"Journals retrieved from Firestore: {journals}")
+        logging.info(f"Journals found for user {user_id}: {journals}")
 
         if not journals:
             return html.P("You haven't created any journals yet.")
@@ -376,7 +306,7 @@ def register_home_callbacks(app):
                             mt="md",
                             radius="md",
                         ),
-                        href=f"/journal/{journal.get('id')}",
+                        href=f"/journal/{journal.get('id')}/view",
                         style={"textDecoration": "none"},
                     ),
                 ],

@@ -1,8 +1,35 @@
+import logging
+from datetime import datetime, timezone
 from firebase_admin import firestore, storage
 from firebase_config import db
 import uuid
 import base64
 import mimetypes
+import pycountry
+
+DEFAULT_COVER_IMAGE = 'https://via.placeholder.com/150'
+
+
+def _format_document_timestamps(doc_data):
+    """
+    Recursively converts Firestore timestamps to ISO 8601 strings.
+    """
+    if not doc_data:
+        return doc_data
+
+    # Format top-level timestamps
+    for field in ['created_at', 'updated_at']:
+        if field in doc_data and hasattr(doc_data[field], 'isoformat'):
+            doc_data[field] = doc_data[field].isoformat()
+
+    # Format timestamps in nested 'journalPlaces'
+    if 'journalPlaces' in doc_data and isinstance(doc_data['journalPlaces'], list):
+        for place in doc_data['journalPlaces']:
+            if isinstance(place, dict):
+                for field in ['created_at', 'updated_at']:
+                    if field in place and hasattr(place[field], 'isoformat'):
+                        place[field] = place[field].isoformat()
+    return doc_data
 
 
 def create_journal(user_id, title, summary, introduction, cover_image_url,
@@ -11,15 +38,12 @@ def create_journal(user_id, title, summary, introduction, cover_image_url,
     Creates a new journal entry in the Firestore database.
     """
     try:
-        image_url = 'https://via.placeholder.com/150'
+        image_url = DEFAULT_COVER_IMAGE
         if cover_image_url and cover_image_url.startswith('data:image'):
             header, encoded = cover_image_url.split(",", 1)
             mime_type = header.split(";")[0].split(":")[1]
             
-            # Guess the extension based on the mime type
-            extension = mimetypes.guess_extension(mime_type)
-            if not extension:
-                extension = '.png'  # Default to .png if detection fails
+            extension = mimetypes.guess_extension(mime_type) or '.png'
             
             image_data = base64.b64decode(encoded)
             
@@ -43,11 +67,12 @@ def create_journal(user_id, title, summary, introduction, cover_image_url,
             'currency': currency,
             'created_at': firestore.SERVER_TIMESTAMP,
             'updated_at': firestore.SERVER_TIMESTAMP,
+            'journalPlaces': [],
         }
-        update_time, journal_ref = journals_ref.add(journal_data)
+        _, journal_ref = journals_ref.add(journal_data)
         return journal_ref.id
     except Exception as e:
-        print(f"An error occurred while creating the journal: {e}")
+        logging.error(f"An error occurred while creating the journal: {e}")
         return None
 
 
@@ -61,20 +86,11 @@ def get_journal(journal_id):
         if journal.exists:
             journal_data = journal.to_dict()
             journal_data['id'] = journal.id
-            # Convert timestamp to string to avoid serialization errors
-            if 'created_at' in journal_data and hasattr(
-                journal_data['created_at'], 'isoformat'
-            ):
-                journal_data['created_at'] = journal_data['created_at'].isoformat()
-            if 'updated_at' in journal_data and hasattr(
-                journal_data['updated_at'], 'isoformat'
-            ):
-                journal_data['updated_at'] = journal_data['updated_at'].isoformat()
-            return journal_data
+            return _format_document_timestamps(journal_data)
         else:
             return None
     except Exception as e:
-        print(f"An error occurred while retrieving the journal: {e}")
+        logging.error(f"An error occurred while retrieving the journal: {e}")
         return None
 
 
@@ -93,19 +109,10 @@ def get_user_journals(user_id):
         for doc in results:
             journal_data = doc.to_dict()
             journal_data['id'] = doc.id
-            # Convert timestamp to string to avoid serialization errors
-            if 'created_at' in journal_data and hasattr(
-                journal_data['created_at'], 'isoformat'
-            ):
-                journal_data['created_at'] = journal_data['created_at'].isoformat()
-            if 'updated_at' in journal_data and hasattr(
-                journal_data['updated_at'], 'isoformat'
-            ):
-                journal_data['updated_at'] = journal_data['updated_at'].isoformat()
-            journals_list.append(journal_data)
+            journals_list.append(_format_document_timestamps(journal_data))
         return journals_list
     except Exception as e:
-        print(f"An error occurred while retrieving user journals: {e}")
+        logging.error(f"An error occurred while retrieving user journals: {e}")
         return []
 
 
@@ -116,14 +123,10 @@ def get_all_journals():
     try:
         journals_ref = db.collection('travelJournals')
         results = journals_ref.stream()
-        journals_list = []
-        for doc in results:
-            journal_data = doc.to_dict()
-            journal_data['id'] = doc.id
-            journals_list.append(journal_data)
+        journals_list = [doc.to_dict() | {'id': doc.id} for doc in results]
         return journals_list
     except Exception as e:
-        print(f"An error occurred while retrieving all journals: {e}")
+        logging.error(f"An error occurred while retrieving all journals: {e}")
         return []
 
 
@@ -137,86 +140,47 @@ def update_journal(journal_id, data):
         journal_ref.update(data)
         return True
     except Exception as e:
-        print(f"An error occurred while updating the journal: {e}")
+        logging.error(f"An error occurred while updating the journal: {e}")
         return False
 
 
-def add_place(journal_id, user_id, place_data):
+def add_place(journal_id, place_data):
     """
-    Creates a new place document in the 'places' collection.
+    Adds a new place to the 'journalPlaces' array within a journal document.
     """
-    try:
-        places_ref = db.collection('places')
-        # Work with a copy to avoid modifying the original dict
-        data_to_add = place_data.copy()
-        data_to_add.update({
-            'journal_id': journal_id,
-            'user_id': user_id,
-            'created_at': firestore.SERVER_TIMESTAMP,
-            'updated_at': firestore.SERVER_TIMESTAMP,
-        })
-        update_time, place_ref = places_ref.add(data_to_add)
-        return place_ref.id
-    except Exception as e:
-        print(f"An error occurred while adding a place: {e}")
+    if not journal_id:
+        logging.error("`journal_id` is missing.")
         return None
 
-
-def get_place(place_id):
-    """
-    Retrieves a specific place from Firestore.
-    """
     try:
-        place_ref = db.collection('places').document(place_id)
-        place = place_ref.get()
-        if place.exists:
-            place_data = place.to_dict()
-            place_data['id'] = place.id
-            # Convert timestamp to string to avoid serialization errors
-            if 'created_at' in place_data and hasattr(
-                place_data['created_at'], 'isoformat'
-            ):
-                place_data['created_at'] = place_data['created_at'].isoformat()
-            if 'updated_at' in place_data and hasattr(
-                place_data['updated_at'], 'isoformat'
-            ):
-                place_data['updated_at'] = place_data['updated_at'].isoformat()
-            return place_data
-        else:
+        journal_ref = db.collection('travelJournals').document(journal_id)
+        
+        # Check if the journal document exists before attempting to update it
+        journal_doc = journal_ref.get()
+        if not journal_doc.exists:
+            logging.error(f"Journal with ID '{journal_id}' not found.")
             return None
+
+        place_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+        new_place = place_data.copy()
+        new_place.update({
+            'place_id': place_id,
+            'created_at': now,
+            'updated_at': now
+        })
+
+        journal_ref.update({
+            'journalPlaces': firestore.ArrayUnion([new_place]),
+            'updated_at': firestore.SERVER_TIMESTAMP
+        })
+
+        logging.info(f"Successfully added place '{place_id}' to journal '{journal_id}'.")
+        return place_id
+
     except Exception as e:
-        print(f"An error occurred while retrieving the place: {e}")
+        logging.error(f"An error occurred while adding a place to journal '{journal_id}': {e}", exc_info=True)
         return None
-
-def get_journal_places(journal_id):
-    """
-    Retrieves all places for a specific journal.
-    """
-    try:
-        places_ref = db.collection('places')
-        query = places_ref.where('journal_id', '==', journal_id).order_by(
-            'created_at', direction=firestore.Query.ASCENDING
-        )
-        results = query.stream()
-
-        places_list = []
-        for doc in results:
-            place_data = doc.to_dict()
-            place_data['id'] = doc.id
-            # Convert timestamp to string to avoid serialization errors
-            if 'created_at' in place_data and hasattr(
-                place_data['created_at'], 'isoformat'
-            ):
-                place_data['created_at'] = place_data['created_at'].isoformat()
-            if 'updated_at' in place_data and hasattr(
-                place_data['updated_at'], 'isoformat'
-            ):
-                place_data['updated_at'] = place_data['updated_at'].isoformat()
-            places_list.append(place_data)
-        return places_list
-    except Exception as e:
-        print(f"An error occurred while retrieving journal places: {e}")
-        return []
 
 
 def delete_journal(journal_id):
@@ -228,5 +192,22 @@ def delete_journal(journal_id):
         journal_ref.delete()
         return True
     except Exception as e:
-        print(f"An error occurred while deleting the journal: {e}")
+        logging.error(f"An error occurred while deleting the journal: {e}")
         return False
+
+
+def get_currency_data():
+    currency_data = []
+    for country in pycountry.countries:
+        try:
+            currency = pycountry.currencies.get(numeric=country.numeric)
+            if currency:
+                # The 'flag' attribute was removed in pycountry 23.12.11.
+                # This is the new recommended way to get the flag emoji.
+                flag = "".join(
+                    chr(ord(c.lower()) + 127397) for c in country.alpha_2
+                )
+                currency_data.append(f"{flag} {currency.alpha_3}")
+        except (AttributeError, KeyError):
+            continue
+    return sorted(list(set(currency_data)))

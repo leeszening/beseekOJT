@@ -1,7 +1,6 @@
 import dash
 import dash_mantine_components as dmc
 from dash import html, dcc, Input, Output, State
-from dash.dependencies import ClientsideFunction
 from src.components.auth import (
     update_user_password, get_user_profile, update_user_profile, upload_avatar,
     delete_avatar
@@ -16,7 +15,6 @@ def profile_layout():
         [
             dcc.Store(id='profile-uid-store'),
             dcc.Store(id='edit-mode-store', data=False),
-            dcc.Store(id='modal-trigger-store'),
             dmc.Card(
                 withBorder=True,
                 shadow="sm",
@@ -295,24 +293,14 @@ def register_profile_callbacks(app):
         else:
             return dmc.Alert("Failed to update profile.", color="red"), True, dash.no_update, dash.no_update
 
-    app.clientside_callback(
-        ClientsideFunction(
-            namespace='clientside',
-            function_name='open_modal'
-        ),
-        Output('modal-trigger-store', 'data'),
-        Input('change-password-btn', 'n_clicks'),
-        prevent_initial_call=True
-    )
-
     @app.callback(
         Output("password-modal", "opened"),
-        Input("modal-trigger-store", "data"),
+        Input("change-password-btn", "n_clicks"),
         State("password-modal", "opened"),
         prevent_initial_call=True,
     )
-    def toggle_password_modal(trigger, is_opened):
-        if trigger:
+    def toggle_password_modal(n_clicks, is_opened):
+        if n_clicks:
             return not is_opened
         return is_opened
 

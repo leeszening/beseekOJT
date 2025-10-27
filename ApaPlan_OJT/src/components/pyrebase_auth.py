@@ -1,28 +1,4 @@
-import os
-import pyrebase
-from dotenv import load_dotenv
-
-# Load environment variables from .env file only in local development
-if 'K_SERVICE' not in os.environ:
-    load_dotenv()
-
-
-def get_firebase_config():
-    return {
-        "apiKey": os.getenv("FIREBASE_WEB_API_KEY"),
-        "authDomain": os.getenv("AUTH_DOMAIN"),
-        "projectId": os.getenv("PROJECT_ID"),
-        "storageBucket": os.getenv("STORAGE_BUCKET"),
-        "messagingSenderId": os.getenv("MESSAGING_SENDER_ID"),
-        "appId": os.getenv("APP_ID"),
-        "measurementId": os.getenv("MEASUREMENT_ID"),
-        "databaseURL": ""
-    }
-
-
-firebase_config = get_firebase_config()
-firebase = pyrebase.initialize_app(firebase_config)
-auth = firebase.auth()
+from firebase_config import pyrebase_auth as auth
 
 
 def sign_in_user(email, password):
