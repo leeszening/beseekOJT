@@ -62,6 +62,7 @@ from src.pages.login_page import login_layout, register_login_callbacks
 from src.pages.home_page import home_layout, register_home_callbacks
 from src.pages.profile_page import profile_layout, register_profile_callbacks
 from src.pages.journal_detail_page import journal_detail_layout, register_journal_detail_callbacks
+from src.pages.journal_edit_page import journal_edit_layout, register_journal_edit_callbacks
 
 # Load env variables for client-side (pyrebase)
 load_dotenv()
@@ -90,6 +91,7 @@ register_login_callbacks(app)
 register_home_callbacks(app)
 register_profile_callbacks(app)
 register_journal_detail_callbacks(app)
+register_journal_edit_callbacks(app)
 
 
 # --- Logout an user ---
@@ -118,13 +120,15 @@ def display_page(pathname, auth_data):
             return home_layout()
         elif pathname and pathname.startswith('/journal/'):
             parts = pathname.split('/')
-            if len(parts) == 4:
+            if len(parts) == 4 and parts[3] == 'edit':
                 journal_id = parts[2]
-                mode = parts[3]
-                return journal_detail_layout(journal_id, auth_data, mode)
-            elif len(parts) == 3:
+                return journal_edit_layout(journal_id, auth_data)
+            elif len(parts) == 4 and parts[3] == 'view':
                 journal_id = parts[2]
-                return journal_detail_layout(journal_id, auth_data, 'view')
+                return journal_detail_layout(journal_id, auth_data)
+            elif len(parts) == 3: # Default to view
+                journal_id = parts[2]
+                return journal_detail_layout(journal_id, auth_data)
         else:
             return home_layout()  # Or a 404 page
     else:
