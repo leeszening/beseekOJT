@@ -5,11 +5,20 @@ def get_user_info(id_token):
     """Fetches user information from Firebase Auth."""
     try:
         decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
+        uid = decoded_token["uid"]
         user = auth.get_user(uid)
         return user
     except Exception:
         return None
+
+
+def get_all_users():
+    """Fetches all users from Firebase Auth."""
+    try:
+        users = auth.list_users().iterate_all()
+        return {user.uid: user for user in users}
+    except Exception:
+        return {}
 
 def handle_auth_error(error_message):
     """

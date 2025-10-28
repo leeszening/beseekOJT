@@ -153,6 +153,7 @@ def upload_avatar(uid, file_contents, file_name):
         # Update user profile with the new avatar URL
         logging.info(f"Updating user profile with new avatar URL: {blob.public_url}")
         update_user_profile(uid, {"avatar_url": blob.public_url})
+        auth.update_user(uid, photo_url=blob.public_url)
         logging.info("User profile updated successfully.")
 
         return {"status": "success", "data": {"avatar_url": blob.public_url}}
@@ -191,6 +192,7 @@ def delete_avatar(uid):
 
         # Update user profile to remove the avatar URL
         update_user_profile(uid, {"avatar_url": ""})
+        auth.update_user(uid, photo_url=None)
         logging.info("User profile updated to remove avatar URL.")
 
         return {"status": "success"}

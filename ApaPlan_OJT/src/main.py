@@ -42,7 +42,7 @@ except ValueError:
         # Assumes a serviceAccountKey.json file is in your project root directory
         cred_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'serviceAccountKey.json')
         cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred, firebase_options)
+        firebase_admin.initialize_app(cred, options=firebase_options)
         logging.info("Firebase app initialized successfully using local credentials.")
 
 # Now that the app is initialized, we can get the firestore client
