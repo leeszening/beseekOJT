@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+        <script
+            src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=onGoogleApiLoad"
+            async
+            defer
+        ></script>
+    </body>
+</html>

@@ -67,13 +67,38 @@ from src.pages.journal_edit_page import journal_edit_layout, register_journal_ed
 # Load env variables for client-side (pyrebase)
 load_dotenv()
 
+# --- Load custom index.html ---
+# This is the standard and most robust way to include external scripts.
+# We read the template and inject the Google Maps API key from the environment.
+with open("index.html", "r") as f:
+    index_template = f.read()
+    GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+    if GOOGLE_MAPS_API_KEY:
+        index_template = index_template.replace("YOUR_API_KEY", GOOGLE_MAPS_API_KEY)
+    else:
+        logging.warning("GOOGLE_MAPS_API_KEY not found in .env file. Map features will be disabled.")
+        # Optionally, remove the script tag if the key is missing
+        index_template = index_template.replace(
+            '<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=onGoogleApiLoad" async defer></script>',
+            '<!-- Google Maps script disabled due to missing API key -->'
+        )
+
 
 # --- Flask server ---
 server = Flask(__name__)
 
 
 # --- Dash app ---
-app = Dash(__name__, server=server, suppress_callback_exceptions=True)
+# Explicitly setting the assets_folder is crucial for Dash to recognize and serve
+# the custom JavaScript files located in 'src/assets'. This is especially important
+# for the clientside callbacks that power the map and autocomplete features.
+app = Dash(
+    __name__,
+    server=server,
+    suppress_callback_exceptions=True,
+    assets_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets'),
+    index_string=index_template
+)
 app.title = "ApaPlan"
 
 

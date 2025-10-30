@@ -5,7 +5,7 @@ from src.shared.journal_utils import (
     create_journal,
     get_user_journals,
     get_all_journals,
-    get_all_user_profiles,
+    get_user_profiles_by_ids,
     get_journal,
     delete_journal,
     upload_cover_image,
@@ -162,7 +162,7 @@ def register_home_callbacks(app):
                             ),
                             dmc.AccordionItem(
                                 [
-                                    dmc.AccordionControl("All Journals"),
+                                    dmc.AccordionControl("Discover All Journals"),
                                     dmc.AccordionPanel(
                                         html.Div(id="all-journal-list-container")
                                     ),
@@ -309,7 +309,6 @@ def register_home_callbacks(app):
                 cover_image_url=None,
                 start_date=start_date,
                 days=days,
-                nights=days - 1 if days > 0 else 0,
                 places=None,
                 journal_entries=None,
             )
@@ -364,17 +363,19 @@ def register_home_callbacks(app):
 
         user_id = user_info["uid"]
         journals = get_user_journals(user_id)
-        all_user_profiles = get_all_user_profiles()
 
         if not journals:
             return html.P("You haven't created any journals yet.")
+
+        author_ids = [journal.get("user_id") for journal in journals]
+        user_profiles = get_user_profiles_by_ids(author_ids)
 
         journal_cards = []
         for journal in journals:
             # Use duration instead of start_date for the badge
             duration_str = f"{journal.get('days', 1)} Days"
             author_id = journal.get("user_id")
-            author_profile = all_user_profiles.get(author_id)
+            author_profile = user_profiles.get(author_id)
             author_avatar = (
                 author_profile.get("avatar_url") if author_profile else None
             )
@@ -423,7 +424,7 @@ def register_home_callbacks(app):
                         mb="xs",
                     ),
                     dmc.Text(
-                        journal.get("description", "No description available."),
+                        journal.get("summary", "No summary available."),
                         size="sm",
                         c="dimmed",
                         lineClamp=2,
@@ -474,16 +475,18 @@ def register_home_callbacks(app):
 
         user_id = user_info["uid"]
         journals = get_all_journals()
-        all_user_profiles = get_all_user_profiles()
 
         if not journals:
             return html.P("No journals have been created yet.")
+
+        author_ids = [journal.get("user_id") for journal in journals]
+        user_profiles = get_user_profiles_by_ids(author_ids)
 
         journal_cards = []
         for journal in journals:
             duration_str = f"{journal.get('days', 1)} Days"
             author_id = journal.get("user_id")
-            author_profile = all_user_profiles.get(author_id)
+            author_profile = user_profiles.get(author_id)
             author_avatar = (
                 author_profile.get("avatar_url") if author_profile else None
             )
@@ -553,7 +556,7 @@ def register_home_callbacks(app):
                         mb="xs",
                     ),
                     dmc.Text(
-                        journal.get("description", "No description available."),
+                        journal.get("summary", "No summary available."),
                         size="sm",
                         c="dimmed",
                         lineClamp=2,

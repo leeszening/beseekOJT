@@ -80,19 +80,19 @@ def journal_detail_layout(journal_id=None, auth_data=None):
         dcc.Interval(id='journal-detail-interval', interval=5000, n_intervals=0),
         dcc.Link(dmc.Button("Back to Home", variant="outline"), href="/home"),
         html.H1("Journal Details"),
+        html.Img(
+            id='journal-cover-image',
+            src=journal.get('cover_image_url', 'https://via.placeholder.com/200x150'),
+            style={
+                'width': '100%',
+                'height': 'auto',
+                'maxHeight': '300px',
+                'objectFit': 'cover',
+                'marginBottom': '2rem'
+            }
+        ),
         dmc.Grid(
             children=[
-                dmc.GridCol(
-                    [
-                        dmc.Text("Cover Image"),
-                        html.Img(
-                            id='journal-cover-image',
-                            src=journal.get('cover_image_url', 'https://via.placeholder.com/200x150'),
-                            style={'width': '100%', 'height': 'auto'}
-                        ),
-                    ],
-                    span=4
-                ),
                 dmc.GridCol(
                     [
                         dmc.Text(id='journal-title', children=journal.get('title', 'No Title'), size="xl", fw=700),
@@ -125,7 +125,7 @@ def journal_detail_layout(journal_id=None, auth_data=None):
                             dmc.Text(id='journal-total-cost', children=f"{journal.get('total_cost', 'N/A')} {journal.get('currency', '')}")
                         ]),
                     ],
-                    span=8
+                    span=12
                 ),
             ],
             gutter="xl",

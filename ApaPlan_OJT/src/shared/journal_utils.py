@@ -6,11 +6,14 @@ import base64
 import uuid
 import re
 import io
-from cachetools import cached, TTLCache
+from cachetools import cached, TTLCache, keys
 from cachetools.keys import hashkey
 
 # Cache for journal data, with a TTL of 5 minutes
 journal_cache = TTLCache(maxsize=100, ttl=300)
+
+# Cache for user profiles, with a TTL of 5 minutes
+user_profile_cache = TTLCache(maxsize=100, ttl=300)
 
 
 def clear_journal_cache(journal_id):
@@ -278,6 +281,34 @@ def get_all_user_profiles():
         return {}
 
 
+@cached(user_profile_cache, key=lambda user_ids: keys.hashkey(tuple(sorted(user_ids))))
+def get_user_profiles_by_ids(user_ids):
+    """
+    Fetches specific user profiles from the Firestore 'users' collection by their IDs.
+    Caches the results. The user_ids list is converted to a sorted tuple to be hashable.
+    """
+    db = firestore.client()
+    users = {}
+    # Ensure user_ids is a list of unique strings
+    unique_user_ids = list(set(filter(None, user_ids)))
+
+    if not unique_user_ids:
+        return users
+
+    # Firestore 'in' queries are limited to 30 items per query.
+    # We need to batch the requests if there are more than 30 user_ids.
+    for i in range(0, len(unique_user_ids), 30):
+        batch_ids = unique_user_ids[i:i + 30]
+        try:
+            users_query = db.collection("users").where("__name__", "in", batch_ids).stream()
+            for user in users_query:
+                user_data = user.to_dict()
+                users[user.id] = user_data
+        except Exception as e:
+            print(f"Error getting user profiles by IDs: {e}")
+    return users
+
+
 def get_all_journals():
     """
     Fetches all public journals from all users.
@@ -478,6 +509,26 @@ def delete_places_outside_date_range(journal_id, start_date_str, end_date_str):
         return True
     except Exception as e:
         print(f"Error deleting places outside date range: {e}")
+        return False
+
+
+def delete_place(journal_id, place_id):
+    """
+    Deletes a specific place from a journal's sub-collection.
+    """
+    db = firestore.client()
+    try:
+        place_ref = (
+            db.collection("travelJournals")
+            .document(journal_id)
+            .collection("journalPlaces")
+            .document(place_id)
+        )
+        place_ref.delete()
+        clear_journal_cache(journal_id)
+        return True
+    except Exception as e:
+        print(f"Error deleting place: {e}")
         return False
 
 
