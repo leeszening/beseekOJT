@@ -55,7 +55,7 @@ firebase_config.db = firestore.client()
 import dash
 from dash import Dash, html, dcc, Input, Output, State
 import dash_mantine_components as dmc
-from flask import Flask
+from flask import Flask, jsonify
 from dotenv import load_dotenv
 
 from src.pages.login_page import login_layout, register_login_callbacks
@@ -68,24 +68,21 @@ from src.pages.journal_edit_page import journal_edit_layout, register_journal_ed
 load_dotenv()
 
 # --- Load custom index.html ---
-# This is the standard and most robust way to include external scripts.
-# We read the template and inject the Google Maps API key from the environment.
+# We will load the original template. The API key will be fetched by the client.
 with open("index.html", "r") as f:
     index_template = f.read()
-    GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
-    if GOOGLE_MAPS_API_KEY:
-        index_template = index_template.replace("YOUR_API_KEY", GOOGLE_MAPS_API_KEY)
-    else:
-        logging.warning("GOOGLE_MAPS_API_KEY not found in .env file. Map features will be disabled.")
-        # Optionally, remove the script tag if the key is missing
-        index_template = index_template.replace(
-            '<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=onGoogleApiLoad" async defer></script>',
-            '<!-- Google Maps script disabled due to missing API key -->'
-        )
 
 
 # --- Flask server ---
 server = Flask(__name__)
+
+# --- API Endpoint for Google Maps API Key ---
+@server.route('/api/maps-key', methods=['GET'])
+def get_maps_api_key():
+    api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+    if not api_key:
+        return jsonify({"error": "API key not configured"}), 500
+    return jsonify({"apiKey": api_key})
 
 
 # --- Dash app ---
