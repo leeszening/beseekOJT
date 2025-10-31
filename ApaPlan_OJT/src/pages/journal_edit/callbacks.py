@@ -304,16 +304,7 @@ def register_journal_edit_callbacks(app):
             place_id = trigger_id.get("place_id")
             return True, place_id if "edit-place-btn" in trigger_id_str else None
 
-        return not is_open, None
-        ctx = dash.callback_context
-        if not ctx.triggered:
-            return no_update
-
-        triggered_value = ctx.triggered[0]['value']
-        if triggered_value is None:
-            return no_update
-
-        return not is_open
+        return no_update, no_update
 
     @app.callback(
         Output("place-date-select", "children"),
