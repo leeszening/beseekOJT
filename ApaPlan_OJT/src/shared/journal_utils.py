@@ -361,6 +361,26 @@ def update_journal(journal_id, update_data):
         return False
 
 
+def update_place(journal_id, place_id, place_data):
+    """
+    Updates an existing place in a journal's sub-collection.
+    """
+    db = firestore.client()
+    try:
+        place_ref = (
+            db.collection("travelJournals")
+            .document(journal_id)
+            .collection("journalPlaces")
+            .document(place_id)
+        )
+        place_ref.update(place_data)
+        clear_journal_cache(journal_id)
+        return True
+    except Exception as e:
+        print(f"Error updating place: {e}")
+        return False
+
+
 def add_place(journal_id, place_data):
     """
     Adds a place to a journal, using auto-generated IDs for the 'places'

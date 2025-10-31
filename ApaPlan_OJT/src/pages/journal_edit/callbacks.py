@@ -8,6 +8,7 @@ from src.shared.journal_utils import (
     get_journal_with_details,
     update_journal,
     add_place,
+    update_place,
     upload_cover_image,
     delete_cover_image,
     delete_places_outside_date_range,
@@ -277,14 +278,33 @@ def register_journal_edit_callbacks(app):
 
     @app.callback(
         Output("add-place-modal", "opened"),
+        Output("place-to-edit-store", "data"),
         [
             Input({"type": "add-place-day-btn", "date": dash.ALL}, "n_clicks"),
-            Input("cancel-place-btn", "n_clicks")
+            Input({"type": "edit-place-btn", "place_id": dash.ALL}, "n_clicks"),
+            Input("cancel-place-btn", "n_clicks"),
+            Input("save-place-btn", "n_clicks"),
         ],
         [State("add-place-modal", "opened")],
         prevent_initial_call=True,
     )
-    def toggle_modal(n_add, n_cancel, is_open):
+    def toggle_modal(n_add, n_edit, n_cancel, n_save, is_open):
+        ctx = dash.callback_context
+        if not ctx.triggered:
+            return no_update, no_update
+
+        trigger_id_str = ctx.triggered[0]["prop_id"].split(".")[0]
+
+        if "cancel-place-btn" in trigger_id_str or "save-place-btn" in trigger_id_str:
+            return False, None
+
+        if any(n is not None for n in n_add) or any(n is not None for n in n_edit):
+            import json
+            trigger_id = json.loads(trigger_id_str)
+            place_id = trigger_id.get("place_id")
+            return True, place_id if "edit-place-btn" in trigger_id_str else None
+
+        return not is_open, None
         ctx = dash.callback_context
         if not ctx.triggered:
             return no_update
@@ -298,28 +318,30 @@ def register_journal_edit_callbacks(app):
     @app.callback(
         Output("place-date-select", "children"),
         Output("place-date-select", "value"),
+        Output("place-name-input", "value", allow_duplicate=True),
+        Output("place-address-input", "value", allow_duplicate=True),
+        Output("place-notes-input", "value"),
+        Output("add-place-modal", "title"),
+        Input("place-to-edit-store", "data"),
         Input({"type": "add-place-day-btn", "date": dash.ALL}, "n_clicks"),
         State("journal-edit-store", "data"),
+        State("places-store", "data"),
         prevent_initial_call=True,
     )
-    def populate_date_dropdown(n_clicks, journal_data):
+    def populate_modal_for_add_or_edit(
+        place_id, n_add, journal_data, places_data
+    ):
         ctx = dash.callback_context
-        if not ctx.triggered or not any(n_clicks):
-            return no_update, no_update
-
-        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        import json
-        date = json.loads(trigger_id).get("date")
+        if not ctx.triggered:
+            return no_update, no_update, no_update, no_update, no_update, no_update
 
         start_date_str = journal_data.get("start_date")
         days = journal_data.get("days")
-
         if not start_date_str or not days:
-            return [], [date] if date else []
+            return [], [], "", "", "", "Add a New Place"
 
         start_date = datetime.strptime(start_date_str.split("T")[0], "%Y-%m-%d")
-
-        children = [
+        date_options = [
             dmc.Chip(
                 f"Day {i + 1}: {(start_date + timedelta(days=i)).strftime('%B %d')}",
                 value=(start_date + timedelta(days=i)).strftime("%Y-%m-%d"),
@@ -327,7 +349,26 @@ def register_journal_edit_callbacks(app):
             for i in range(days)
         ]
 
-        return children, [date] if date else []
+        if place_id:  # Editing an existing place
+            place = next((p for p in places_data if p["id"] == place_id), None)
+            if place:
+                return (
+                    date_options,
+                    [place.get("date", "").split("T")[0]],
+                    place.get("name", ""),
+                    place.get("address", ""),
+                    place.get("notes", ""),
+                    "Edit Place",
+                )
+
+        # Adding a new place
+        trigger_id_str = ctx.triggered[0]["prop_id"].split(".")[0]
+        if "add-place-day-btn" in trigger_id_str:
+            import json
+            date = json.loads(trigger_id_str).get("date")
+            return date_options, [date] if date else [], "", "", "", "Add a New Place"
+
+        return date_options, [], "", "", "", "Add a New Place"
 
     @app.callback(
         [
@@ -342,13 +383,21 @@ def register_journal_edit_callbacks(app):
             State("place-address-input", "value"),
             State("place-date-select", "value"),
             State("place-notes-input", "value"),
-            State('selected-place-details-store', 'data'),
+            State("selected-place-json", "value"),
+            State("place-to-edit-store", "data"),
         ],
         prevent_initial_call=True,
     )
     def save_place(
-            n_clicks, journal_data, name, address, selected_dates, notes,
-            place_data_from_map):
+        n_clicks,
+        journal_data,
+        name,
+        address,
+        selected_dates,
+        notes,
+        selected_place_json,
+        place_id_to_edit,
+    ):
         if not n_clicks:
             return no_update, no_update, no_update
 
@@ -356,16 +405,24 @@ def register_journal_edit_callbacks(app):
         if not name or not address or not selected_dates:
             return no_update, True, no_update
 
-        for place_date in selected_dates:
-            place_data = {
-                "name": name,
-                "address": address,
-                "date": place_date,
-                "notes": notes,
-                "latitude": place_data_from_map.get('lat') if place_data_from_map else None,
-                "longitude": place_data_from_map.get('lng') if place_data_from_map else None,
-            }
-            add_place(journal_id, place_data)
+        import json
+        place_data_from_store = (
+            json.loads(selected_place_json) if selected_place_json else {}
+        )
+
+        place_payload = {
+            "name": name,
+            "address": address,
+            "date": selected_dates[0] if selected_dates else None,
+            "notes": notes,
+            "latitude": place_data_from_store.get("lat"),
+            "longitude": place_data_from_store.get("lng"),
+        }
+
+        if place_id_to_edit:
+            update_place(journal_id, place_id_to_edit, place_payload)
+        else:
+            add_place(journal_id, place_payload)
 
         fresh_journal = get_journal_with_details(journal_id)
         places = fresh_journal.get("journalPlaces", [])
@@ -373,6 +430,92 @@ def register_journal_edit_callbacks(app):
         days = fresh_journal.get("days")
 
         return places, False, create_edit_timeline(start_date, days, places, journal_id)
+
+
+    app.clientside_callback(
+        """
+        function(opened) {
+            if (opened) {
+                // A short delay to ensure the modal is fully rendered before initializing the map
+                setTimeout(() => {
+                    if (window.initializeMapComponents) {
+                        window.initializeMapComponents();
+                    }
+                }, 200);
+            }
+            return window.dash_clientside.no_update;
+        }
+        """,
+        Output('add-place-modal', 'data-dummy'),
+        Input('add-place-modal', 'opened')
+    )
+
+    @app.callback(
+        Output('place-map', 'figure'),
+        [Input('places-store', 'data'),
+         Input('selected-place-json', 'value')],
+        prevent_initial_call=True
+    )
+    def update_main_map_with_places(places, selected_place_json):
+        import json
+        selected_place = json.loads(selected_place_json) if selected_place_json else None
+
+        logging.info(f"Updating map. Existing places: {len(places) if places else 0}")
+        logging.info(f"Newly selected place: {selected_place}")
+        places = places or []
+        
+        all_lats = [p['latitude'] for p in places if p.get('latitude') is not None]
+        all_lons = [p['longitude'] for p in places if p.get('longitude') is not None]
+        all_texts = [p.get('name', 'No Name') for p in places]
+        
+        # Add the newly selected place for temporary display
+        if selected_place and selected_place.get('lat') is not None:
+            all_lats.append(selected_place['lat'])
+            all_lons.append(selected_place['lng'])
+            all_texts.append(selected_place.get('name', 'New Selection'))
+
+        if not all_lats or not all_lons:
+            return go.Figure(go.Scattermapbox()).update_layout(
+                mapbox_style="open-street-map",
+                margin={"r": 0, "t": 0, "l": 0, "b": 0}
+            )
+
+        fig = go.Figure(go.Scattermapbox(
+            lat=all_lats,
+            lon=all_lons,
+            mode='markers',
+            marker=go.scattermapbox.Marker(size=12),
+            text=all_texts,
+            hoverinfo='text'
+        ))
+
+        # Center the map on the last added pin (the new selection)
+        center_lat = all_lats[-1]
+        center_lon = all_lons[-1]
+        zoom = 14 if selected_place else 10
+
+        fig.update_layout(
+            mapbox_style="open-street-map",
+            mapbox=dict(
+                center=dict(lat=center_lat, lon=center_lon),
+                zoom=zoom
+            ),
+            margin={"r": 0, "t": 0, "l": 0, "b": 0}
+        )
+        return fig
+
+    @app.callback(
+        Output('place-name-input', 'value'),
+        Output('place-address-input', 'value'),
+        Input('selected-place-json', 'value'),
+        prevent_initial_call=True
+    )
+    def update_form_from_autocomplete(selected_place_json):
+        import json
+        place_data = json.loads(selected_place_json) if selected_place_json else None
+        if place_data:
+            return place_data.get('name', ''), place_data.get('address', '')
+        return no_update, no_update
 
     @app.callback(
         Output("journal-summary-input", "value"),
@@ -433,99 +576,6 @@ def register_journal_edit_callbacks(app):
             logging.error(f"Error during summary generation: {e}")
             return f"An error occurred: {e}"
 
-    app.clientside_callback(
-        """
-        function(opened) {
-            if (opened) {
-                // This is a robust polling mechanism to handle the race condition where this
-                // callback fires before the external Google Maps script has loaded.
-                // It repeatedly checks for `window.setupMapInModal` until it's defined.
-                const maxTries = 15; // Try for 3 seconds (15 * 200ms)
-                let tries = 0;
-                const interval = setInterval(function() {
-                    tries++;
-                    // Check if the function has been defined by onGoogleApiLoad
-                    if (window.setupMapInModal) {
-                        clearInterval(interval); // Stop polling
-                        console.log("setupMapInModal found, initializing map.");
-                        window.setupMapInModal();
-                    } else if (tries >= maxTries) {
-                        clearInterval(interval); // Stop polling after timeout
-                        console.error("setupMapInModal function not found after " + maxTries + " attempts. Google Maps API may have failed to load.");
-                    }
-                }, 200);
-            }
-            return window.dash_clientside.no_update;
-        }
-        """,
-        # The Output is a dummy div. We are not actually changing its properties,
-        # but Dash requires an Output for any callback. This is a standard
-        # pattern for callbacks that only exist to trigger client-side JavaScript.
-        Output('map-clientside-trigger-output', 'data-dummy'),
-        Input('add-place-modal', 'opened')
-    )
-
-    app.clientside_callback(
-        ClientsideFunction(
-            namespace='clientside',
-            function_name='update_autocomplete_bias'
-        ),
-        Output('state-selector-dropdown', 'data-dummy'),
-        Input('state-selector-dropdown', 'value')
-    )
-
-    @app.callback(
-        Output('place-map', 'figure'),
-        Input('selected-place-details-store', 'data'),
-        prevent_initial_call=True
-    )
-    def update_map_on_place_select(place_data):
-        """
-        Updates the map to show a pin at the location of the selected place.
-        """
-        if not place_data or 'lat' not in place_data or 'lng' not in place_data:
-            return no_update
-
-        lat = place_data['lat']
-        lng = place_data['lng']
-        place_name = place_data.get('name', 'Selected Location')
-
-        # Create a new figure with a marker for the selected place
-        fig = go.Figure(go.Scattermapbox(
-            lat=[lat],
-            lon=[lng],
-            mode='markers',
-            marker=go.scattermapbox.Marker(
-                size=14
-            ),
-            text=[place_name]
-        ))
-
-        # Update the layout to center the map on the new pin and set zoom
-        fig.update_layout(
-            mapbox_style="open-street-map",
-            mapbox=dict(
-                center=dict(lat=lat, lon=lng),
-                zoom=15
-            ),
-            margin={"r": 0, "t": 0, "l": 0, "b": 0}
-        )
-
-        return fig
-
-    @app.callback(
-        Output('place-name-input', 'value'),
-        Output('place-address-input', 'value'),
-        Input('selected-place-details-store', 'data'),
-        prevent_initial_call=True
-    )
-    def update_form_from_selected_place(place_data):
-        if place_data:
-            return (
-                place_data.get('name'),
-                place_data.get('formatted_address'),
-            )
-        return no_update, no_update
 
     @app.callback(
         Output("places-store", "data", allow_duplicate=True),
@@ -576,13 +626,13 @@ def register_journal_edit_callbacks(app):
         """
         function(page_loaded) {
             if (page_loaded) {
-                // This callback runs once the page is loaded. It finds the Google Maps
-                // script tag by its ID and attaches our custom error handler to it.
-                // This is the correct way to handle script errors in Dash.
                 const script = document.getElementById('google-maps-script');
                 if (script) {
                     script.onerror = function() {
-                        onGoogleApiError();
+                        const errorDiv = document.getElementById('map-error-div');
+                        if (errorDiv) {
+                            errorDiv.innerHTML = 'Failed to load Google Maps. Please check your internet connection and API key.';
+                        }
                     };
                 }
             }

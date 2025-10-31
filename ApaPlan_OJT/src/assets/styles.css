@@ -62,3 +62,12 @@
 .hidden {
     display: none;
 }
+
+/* 
+  Force Google Places Autocomplete dropdown to appear above other elements, 
+  especially modals which often have a high z-index. 
+  The z-index value (10500) must be higher than the modal's z-index (10000).
+*/
+.pac-container {
+    z-index: 10500 !important;
+}

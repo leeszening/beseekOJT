@@ -64,12 +64,27 @@ def create_edit_timeline(start_date_str, days, places=None, journal_id=None):
                             ],
                             style={'flex': 1}
                         ),
-                        dmc.ActionIcon(
-                            DashIconify(icon="radix-icons:trash"),
-                            id={"type": "delete-place-btn",
-                                "place_id": place.get("id")},
-                            color="red",
-                            variant="hover",
+                        dmc.Group(
+                            [
+                                dmc.ActionIcon(
+                                    DashIconify(icon="radix-icons:pencil-2"),
+                                    id={
+                                        "type": "edit-place-btn",
+                                        "place_id": place.get("id"),
+                                    },
+                                    color="blue",
+                                    variant="hover",
+                                ),
+                                dmc.ActionIcon(
+                                    DashIconify(icon="radix-icons:trash"),
+                                    id={
+                                        "type": "delete-place-btn",
+                                        "place_id": place.get("id"),
+                                    },
+                                    color="red",
+                                    variant="hover",
+                                ),
+                            ]
                         )
                     ],
                     justify="space-between",
@@ -114,46 +129,14 @@ def create_add_place_modal():
         size="xl",
         zIndex=10000,
         children=[
-            html.Div(
-                id="map-container",
-                style={"height": "400px", "width": "100%", "marginBottom": "20px"}
-            ),
+            html.Div(id='add-place-map', style={'height': '400px', 'marginBottom': '20px'}),
             dmc.Grid(
                 children=[
                     dmc.GridCol(
                         [
-                            dmc.Text("Search for a place", fw=500),
-                            # This div will act as a container for the new PlaceAutocompleteElement,
-                            # which will be created and appended by our JavaScript.
-                            html.Div(id="place-autocomplete-container", style={"width": "100%"}),
+                            html.Div(id="place-autocomplete-container"),
                         ],
-                        span=8
-                    ),
-                    dmc.GridCol(
-                        [
-                            dmc.Text("Select a State", fw=500),
-                            dcc.Dropdown(
-                                id='state-selector-dropdown',
-                                options=[
-                                    {'label': 'Johor', 'value': 'Johor'},
-                                    {'label': 'Kedah', 'value': 'Kedah'},
-                                    {'label': 'Kelantan', 'value': 'Kelantan'},
-                                    {'label': 'Malacca', 'value': 'Malacca'},
-                                    {'label': 'Negeri Sembilan',
-                                     'value': 'Negeri Sembilan'},
-                                    {'label': 'Pahang', 'value': 'Pahang'},
-                                    {'label': 'Penang', 'value': 'Penang'},
-                                    {'label': 'Perak', 'value': 'Perak'},
-                                    {'label': 'Perlis', 'value': 'Perlis'},
-                                    {'label': 'Sabah', 'value': 'Sabah'},
-                                    {'label': 'Sarawak', 'value': 'Sarawak'},
-                                    {'label': 'Selangor', 'value': 'Selangor'},
-                                    {'label': 'Terengganu', 'value': 'Terengganu'},
-                                ],
-                                placeholder="Bias search to a state",
-                            ),
-                        ],
-                        span=4
+                        span=12
                     ),
                     dmc.GridCol(
                         [
@@ -200,10 +183,6 @@ def create_add_place_modal():
                 justify="flex-end",
                 style={"marginTop": "20px"},
             ),
-            # Dummy output for the clientside callback to trigger map setup.
-            # This is a common pattern when a callback's primary purpose is to execute JavaScript
-            # without directly updating a visible component property.
-            html.Div(id="map-clientside-trigger-output", style={"display": "none"}),
         ],
     )
 
@@ -404,12 +383,13 @@ def journal_edit_layout(journal_id=None, auth_data=None):
         [
             dcc.Store(id="journal-edit-store"),
             dcc.Store(id="places-store"),
-            dcc.Store(id='selected-place-details-store'),  # Renamed for clarity
-            dcc.Store(id='place-coordinates-store'),
+            # This hidden input is a more reliable way to pass data from JS to Python
+            dcc.Input(id="selected-place-json", type="hidden"),
             dcc.Store(id="page-load-store", data=False),
             dcc.Store(id="place-to-delete-store"),
-            # This dummy div is the target for the clientside callback that attaches the error handler.
+            dcc.Store(id="place-to-edit-store"),
             html.Div(id="script-error-handler-output", style={"display": "none"}),
+            html.Div(id="map-error-div", style={"color": "red"}),
             dcc.Interval(
                 id="journal-load-interval", interval=500, n_intervals=0, max_intervals=5
             ),

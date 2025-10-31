@@ -77,12 +77,13 @@ with open("index.html", "r") as f:
 server = Flask(__name__)
 
 # --- API Endpoint for Google Maps API Key ---
-@server.route('/api/maps-key', methods=['GET'])
-def get_maps_api_key():
+@server.route('/api/maps-config', methods=['GET'])
+def get_maps_config():
     api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-    if not api_key:
-        return jsonify({"error": "API key not configured"}), 500
-    return jsonify({"apiKey": api_key})
+    map_id = os.getenv("GOOGLE_MAP_ID")
+    if not api_key or not map_id:
+        return jsonify({"error": "Maps API key or Map ID not configured"}), 500
+    return jsonify({"apiKey": api_key, "mapId": map_id})
 
 
 # --- Dash app ---
