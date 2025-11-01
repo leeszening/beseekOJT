@@ -6,6 +6,7 @@ import base64
 import uuid
 import re
 import io
+import logging
 from cachetools import cached, TTLCache, keys
 from cachetools.keys import hashkey
 
@@ -42,168 +43,18 @@ def _sanitize_for_json(data):
 # db = firestore.client()
 
 
-@firestore.transactional
-def add_place_to_journal_transaction(transaction, db, journal_ref, place_data):
-    """
-    A transactional function to add a place to a journal.
-    """
-    google_place_id = place_data.get("google_place_id")
-    if not google_place_id:
-        raise ValueError("google_place_id is required")
-
-    place_ref = db.collection("places").document(google_place_id)
-
-    try:
-        place_snapshot = place_ref.get(transaction=transaction)
-        if not place_snapshot.exists:
-            transaction.set(
-                place_ref,
-                {
-                    "name": place_data.get("name"),
-                    "address": place_data.get("address"),
-                },
-            )
-
-        new_journal_place_ref = journal_ref.collection(
-            "journalPlaces"
-        ).document()
-        transaction.set(
-            new_journal_place_ref,
-            {
-                "place_ref": place_ref,
-                "description": place_data.get("description"),
-                "date_visited": place_data.get("date_visited"),
-                "cost": place_data.get("cost"),
-                "created_at": firestore.SERVER_TIMESTAMP,
-            },
-        )
-        return True, new_journal_place_ref.id
-    except Exception as e:
-        print(f"Error in transaction: {e}")
-        return False, None
-
-
-def add_place_to_journal(journal_id, place_data):
-    """
-    Adds a place to a journal, creating the place if it doesn't exist.
-    This function is a wrapper for the transactional function.
-    """
-    db = firestore.client()
-    journal_ref = db.collection("travelJournals").document(journal_id)
-    transaction = db.transaction()
-    success, new_id = add_place_to_journal_transaction(
-        transaction, db, journal_ref, place_data
-    )
-
-    if success:
-        clear_journal_cache(journal_id)
-        return {"status": "success", "journal_place_id": new_id}
-    else:
-        return {"status": "error", "message": "Failed to add place to journal."}
-
-
-@cached(journal_cache)
 def get_journal_with_details(journal_id):
     """
-    Fetches a journal and all its associated place details efficiently,
-    handling both referenced and embedded place data.
+    Fetches a journal by its ID and sanitizes it for client-side display.
+    This is a wrapper around get_journal to provide a sanitized version
+    of the journal data.
     """
-    db = firestore.client()
-    journal_ref = db.collection("travelJournals").document(journal_id)
-    journal_snapshot = journal_ref.get()
-
-    if not journal_snapshot.exists:
+    journal_data = get_journal(journal_id)
+    if not journal_data:
         return None
 
-    journal_data = journal_snapshot.to_dict()
-    journal_data["id"] = journal_snapshot.id
-
-    journal_places = []
-    places_sub_collection = list(journal_ref.collection("journalPlaces").stream())
-
-    # Separate documents with and without place_ref
-    docs_with_ref = []
-    for doc in places_sub_collection:
-        if "place_ref" in doc.to_dict():
-            docs_with_ref.append(doc)
-        else:
-            # For docs without a ref, just add them to the list
-            place_data = doc.to_dict()
-            place_data["id"] = doc.id
-            journal_places.append(place_data)
-
-    # Process documents that have a place_ref
-    if docs_with_ref:
-        place_refs = [doc.to_dict().get("place_ref") for doc in docs_with_ref]
-
-        # Fetch all referenced place documents in a single batch
-        place_snapshots = db.collection("places").where(
-            "__name__", "in", [ref.id for ref in place_refs]
-        ).stream()
-
-        places_by_id = {snap.id: snap.to_dict() for snap in place_snapshots}
-
-        # Combine the data
-        for place_doc in docs_with_ref:
-            place_data = place_doc.to_dict()
-            place_ref = place_data.get("place_ref")
-
-            if place_ref and place_ref.id in places_by_id:
-                place_details = places_by_id[place_ref.id]
-                combined_data = {**place_details, **place_data}
-                combined_data["id"] = place_doc.id
-                journal_places.append(combined_data)
-
-    journal_data["journalPlaces"] = journal_places
+    journal_data["journalPlaces"] = []  # Maintain original behavior
     return _sanitize_for_json(journal_data)
-
-
-def update_journal_place(journal_id, journal_place_id, update_data):
-    """
-    Updates a specific place document in a journal's sub-collection.
-    """
-    db = firestore.client()
-    journal_place_ref = (
-        db.collection("travelJournals")
-        .document(journal_id)
-        .collection("journalPlaces")
-        .document(journal_place_id)
-    )
-
-    # Add an 'updated_at' timestamp to the update data
-    update_with_timestamp = {
-        **update_data,
-        "updated_at": firestore.SERVER_TIMESTAMP,
-    }
-
-    try:
-        journal_place_ref.update(update_with_timestamp)
-        clear_journal_cache(journal_id)
-        return {"status": "success"}
-    except Exception as e:
-        print(f"Error updating document: {e}")
-        return {"status": "error", "message": str(e)}
-
-
-def delete_journal_place(journal_id, journal_place_id):
-    """
-    Deletes a specific place document from a journal's sub-collection.
-    """
-    db = firestore.client()
-    journal_place_ref = (
-        db.collection("travelJournals")
-        .document(journal_id)
-        .collection("journalPlaces")
-        .document(journal_place_id)
-    )
-
-    try:
-        journal_place_ref.delete()
-        clear_journal_cache(journal_id)
-        return {"status": "success"}
-    except Exception as e:
-        print(f"Error deleting document: {e}")
-        return {"status": "error", "message": str(e)}
 
 
 def create_journal(
@@ -264,21 +115,6 @@ def get_user_journals(user_id):
         return []
 
 
-def get_all_user_profiles():
-    """
-    Fetches all user profiles from the Firestore 'users' collection.
-    """
-    db = firestore.client()
-    try:
-        users_query = db.collection("users").stream()
-        users = {}
-        for user in users_query:
-            user_data = user.to_dict()
-            users[user.id] = user_data
-        return users
-    except Exception as e:
-        print(f"Error getting all user profiles: {e}")
-        return {}
 
 
 @cached(user_profile_cache, key=lambda user_ids: keys.hashkey(tuple(sorted(user_ids))))
@@ -361,75 +197,6 @@ def update_journal(journal_id, update_data):
         return False
 
 
-def update_place(journal_id, place_id, place_data):
-    """
-    Updates an existing place in a journal's sub-collection.
-    """
-    db = firestore.client()
-    try:
-        place_ref = (
-            db.collection("travelJournals")
-            .document(journal_id)
-            .collection("journalPlaces")
-            .document(place_id)
-        )
-        place_ref.update(place_data)
-        clear_journal_cache(journal_id)
-        return True
-    except Exception as e:
-        print(f"Error updating place: {e}")
-        return False
-
-
-def add_place(journal_id, place_data):
-    """
-    Adds a place to a journal, using auto-generated IDs for the 'places'
-    collection and preventing duplicates.
-    """
-    db = firestore.client()
-    journal_ref = db.collection("travelJournals").document(journal_id)
-    place_name = place_data.get("name")
-    place_address = place_data.get("address")
-
-    if not all([place_name, place_address]):
-        print("Error: Place name and address are required.")
-        return None
-
-    try:
-        places_collection = db.collection("places")
-        # Query for an existing place to avoid duplicates
-        existing_places = list(
-            places_collection.where("name", "==", place_name)
-            .where("address", "==", place_address)
-            .limit(1)
-            .stream()
-        )
-
-        if existing_places:
-            place_ref = existing_places[0].reference
-        else:
-            # If no existing place is found, create a new one
-            new_place_data = {"name": place_name, "address": place_address}
-            _, place_ref = db.collection("places").add(new_place_data)
-
-        # Add the place reference to the journal's subcollection
-        new_journal_place_ref = journal_ref.collection("journalPlaces").document()
-        new_journal_place_ref.set(
-            {
-                "place_ref": place_ref,
-                "date": place_data.get("date"),
-                "notes": place_data.get("notes"),
-                "created_at": firestore.SERVER_TIMESTAMP,
-            }
-        )
-        clear_journal_cache(journal_id)
-        return new_journal_place_ref.id
-
-    except Exception as e:
-        print(f"Error adding place with auto-ID: {e}")
-        return None
-
-
 def get_currency_data():
     """
     Returns a list of currencies for the autocomplete input.
@@ -504,54 +271,6 @@ def delete_journal(journal_id):
         return False
 
 
-def delete_places_outside_date_range(journal_id, start_date_str, end_date_str):
-    """
-    Deletes places from a journal that are outside the given date range.
-    """
-    db = firestore.client()
-    journal_ref = db.collection("travelJournals").document(journal_id)
-    places_ref = journal_ref.collection("journalPlaces")
-
-    try:
-        start_date = datetime.fromisoformat(start_date_str.split('T')[0])
-        end_date = datetime.fromisoformat(end_date_str.split('T')[0])
-
-        places_snapshot = places_ref.stream()
-        for place in places_snapshot:
-            place_data = place.to_dict()
-            place_date_str = place_data.get("date")
-            if place_date_str:
-                place_date = datetime.fromisoformat(place_date_str.split('T')[0])
-                if not (start_date <= place_date <= end_date):
-                    place.reference.delete()
-        
-        clear_journal_cache(journal_id)
-        return True
-    except Exception as e:
-        print(f"Error deleting places outside date range: {e}")
-        return False
-
-
-def delete_place(journal_id, place_id):
-    """
-    Deletes a specific place from a journal's sub-collection.
-    """
-    db = firestore.client()
-    try:
-        place_ref = (
-            db.collection("travelJournals")
-            .document(journal_id)
-            .collection("journalPlaces")
-            .document(place_id)
-        )
-        place_ref.delete()
-        clear_journal_cache(journal_id)
-        return True
-    except Exception as e:
-        print(f"Error deleting place: {e}")
-        return False
-
-
 def delete_cover_image(journal_id):
     """
     Deletes a cover image from Firebase Storage and updates the journal.
@@ -580,3 +299,166 @@ def delete_cover_image(journal_id):
     except Exception as e:
         print(f"FATAL: Error deleting cover image: {e}")
         return False
+
+
+@firestore.transactional
+def _create_place_if_not_exists(transaction, place_ref, place_data):
+    """
+    Checks if a place document exists and creates it if it doesn't, within a transaction.
+    """
+    place_snapshot = place_ref.get(transaction=transaction)
+    if not place_snapshot.exists:
+        # Extract general place information
+        location = place_data.get("location", {})
+        general_place_data = {
+            "name": place_data.get("name"),
+            "address": place_data.get("address"),
+            "coordinates": firestore.GeoPoint(
+                location.get("lat", 0), location.get("lng", 0)
+            ),
+            "google_place_id": place_data.get("place_id"),
+            "website": place_data.get("website"),
+            "rating": place_data.get("rating"),
+            "user_ratings_total": place_data.get("user_ratings_total"),
+            "utc_offset_minutes": place_data.get("utc_offset_minutes"),
+            "price_level": place_data.get("price_level"),
+            "types": place_data.get("types"),
+            "created_at": firestore.SERVER_TIMESTAMP,
+        }
+        transaction.set(place_ref, general_place_data)
+
+
+def save_places_to_journal(journal_id, places_data):
+    """
+    Saves multiple places to a journal using batched writes for improved performance.
+    """
+    db = firestore.client()
+    try:
+        journal_places_ref = (
+            db.collection("travelJournals")
+            .document(journal_id)
+            .collection("journalPlaces")
+        )
+        batch = db.batch()
+
+        for place_data in places_data:
+            place_id = place_data.get("place_id")
+            if not place_id:
+                continue
+
+            # Create a reference to the place document
+            place_ref = db.collection("places").document(place_id)
+
+            # Use a transaction to create the place if it doesn't exist
+            transaction = db.transaction()
+            _create_place_if_not_exists(transaction, place_ref, place_data)
+
+            # Determine the order for the new place
+            query = journal_places_ref.where("date", "==", place_data["date"])
+            places_on_date = list(query.stream())
+            order = len(places_on_date) + 1
+
+            # Create a new document reference for the journal place
+            new_journal_place_ref = journal_places_ref.document()
+
+            # Prepare the document data
+            journal_place_doc = {
+                "placeRef": place_ref,
+                "order": order,
+                **place_data,
+            }
+            batch.set(new_journal_place_ref, journal_place_doc)
+
+        # Commit the batch
+        batch.commit()
+        return True
+    except Exception as e:
+        print(f"Error saving places to journal: {e}")
+        return False
+
+
+def fetch_all_journal_places(journal_id):
+    """
+    Fetches all places for a journal, ordered by date and then by the 'order' field.
+    This version is optimized to avoid N+1 queries by batching place detail fetches.
+    """
+    db = firestore.client()
+    try:
+        journal_places_ref = (
+            db.collection("travelJournals")
+            .document(journal_id)
+            .collection("journalPlaces")
+        )
+        query = journal_places_ref.order_by("date").order_by("order").stream()
+
+        journal_places_data = []
+        place_refs = []
+        for doc in query:
+            data = doc.to_dict()
+            data['journal_place_doc_id'] = doc.id
+            journal_places_data.append(data)
+            if 'placeRef' in data and isinstance(data['placeRef'], DocumentReference):
+                place_refs.append(data['placeRef'])
+
+        place_details = {}
+        if place_refs:
+            # Use get_all for efficient batch fetching
+            place_docs = db.get_all(place_refs)
+            for doc in place_docs:
+                if doc.exists:
+                    place_details[doc.reference.path] = doc.to_dict()
+
+        places_with_details = []
+        for jp_data in journal_places_data:
+            place_ref = jp_data.get("placeRef")
+            if place_ref and place_ref.path in place_details:
+                combined_data = {**place_details[place_ref.path], **jp_data}
+                places_with_details.append(combined_data)
+            else:
+                # Handle cases where placeRef is missing or the document doesn't exist
+                print(f"Skipping journal place with missing or invalid placeRef: {jp_data.get('journal_place_doc_id')}")
+
+        return places_with_details
+    except Exception as e:
+        print(f"Error fetching all journal places for journal {journal_id}: {e}")
+        return []
+
+
+def fetch_journal_places(journal_id, date):
+    """
+    Fetches all places for a specific day in a journal, ordered by the 'order' field.
+    It also fetches the details of each place from the 'places' collection.
+    """
+    db = firestore.client()
+    try:
+        journal_places_ref = (
+            db.collection("travelJournals")
+            .document(journal_id)
+            .collection("journalPlaces")
+        )
+        query = (
+            journal_places_ref.where("date", "==", date).order_by("order").stream()
+        )
+
+        places_with_details = []
+        for journal_place_doc in query:
+            journal_place_data = journal_place_doc.to_dict()
+            place_ref = journal_place_data.get("placeRef")
+
+            if place_ref and isinstance(place_ref, DocumentReference):
+                place_doc = place_ref.get()
+                if place_doc.exists:
+                    place_data = place_doc.to_dict()
+                    # Combine journal place data (like order, notes) with place details
+                    combined_data = {**place_data, **journal_place_data}
+                    combined_data['journal_place_doc_id'] = journal_place_doc.id
+                    places_with_details.append(combined_data)
+            else:
+                # Handle cases where placeRef is missing or not a DocumentReference
+                # You might want to log this or handle it as an error
+                print(f"Skipping journal place with missing or invalid placeRef: {journal_place_doc.id}")
+
+        return places_with_details
+    except Exception as e:
+        print(f"Error fetching journal places for date {date}: {e}")
+        return []

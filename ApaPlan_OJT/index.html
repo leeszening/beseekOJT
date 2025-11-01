@@ -20,7 +20,7 @@
                 if (data.apiKey && data.mapId) {
                     window.GOOGLE_MAP_ID = data.mapId; // Store mapId globally
                     const script = document.createElement('script');
-                    script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places,marker`;
+                    script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places,maps,marker`;
                     script.id = 'google-maps-script';
                     script.async = true;
                     script.defer = true;

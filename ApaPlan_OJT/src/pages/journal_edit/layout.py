@@ -25,166 +25,6 @@ def create_initial_map():
     return fig
 
 
-def create_edit_timeline(start_date_str, days, places=None, journal_id=None):
-    """Generates a timeline accordion for the edit page with 'Add Place' buttons."""
-    from datetime import datetime, timedelta
-
-    try:
-        start_date = datetime.strptime(start_date_str.split("T")[0], "%Y-%m-%d")
-    except (ValueError, AttributeError):
-        return dmc.Text("Invalid date format provided.", c="red")
-
-    if not isinstance(days, int) or days <= 0:
-        return dmc.Text("Number of days must be a positive integer.", c="red")
-
-    places_by_date = {}
-    for p in (places or []):
-        place_date = p.get('date', '').split('T')[0]
-        if place_date:
-            if place_date not in places_by_date:
-                places_by_date[place_date] = []
-            places_by_date[place_date].append(p)
-
-    timeline_items = []
-    for i in range(days):
-        current_date = start_date + timedelta(days=i)
-        day_str = current_date.strftime('%Y-%m-%d')
-        day_label = f"Day {i + 1}: {current_date.strftime('%B %d, %Y')}"
-        day_places = places_by_date.get(day_str, [])
-
-        panel_content = [
-            dmc.Paper(
-                dmc.Group(
-                    [
-                        html.Div(
-                            [
-                                dmc.Text(place.get('name', 'No name'), fw=500),
-                                dmc.Text(place.get('address', 'No address'), size="sm"),
-                                dmc.Text(place.get('notes', ''), size="sm", c="dimmed"),
-                            ],
-                            style={'flex': 1}
-                        ),
-                        dmc.Group(
-                            [
-                                dmc.ActionIcon(
-                                    DashIconify(icon="radix-icons:pencil-2"),
-                                    id={
-                                        "type": "edit-place-btn",
-                                        "place_id": place.get("id"),
-                                    },
-                                    color="blue",
-                                    variant="hover",
-                                ),
-                                dmc.ActionIcon(
-                                    DashIconify(icon="radix-icons:trash"),
-                                    id={
-                                        "type": "delete-place-btn",
-                                        "place_id": place.get("id"),
-                                    },
-                                    color="red",
-                                    variant="hover",
-                                ),
-                            ]
-                        )
-                    ],
-                    justify="space-between",
-                    align="center"
-                ),
-                shadow="xs", p="sm", withBorder=True, mb="sm"
-            ) for place in day_places
-        ] if day_places else [dmc.Text("No places for this day.")]
-
-        panel_content.append(
-            dmc.Group(
-                [
-                    dmc.Button(
-                        "Add Place",
-                        id={"type": "add-place-day-btn", "date": day_str},
-                        variant="outline",
-                    )
-                ],
-                justify="flex-end",
-                style={"marginTop": "1rem"},
-            )
-        )
-
-        timeline_items.append(
-            dmc.AccordionItem(
-                [
-                    dmc.AccordionControl(day_label),
-                    dmc.AccordionPanel(dmc.Stack(children=panel_content)),
-                ],
-                value=f"day-{i+1}"
-            )
-        )
-    
-    return dmc.Accordion(children=timeline_items, chevronPosition="left")
-
-
-def create_add_place_modal():
-    """Creates the modal for adding a new place with a map."""
-    return dmc.Modal(
-        id="add-place-modal",
-        title="Add a New Place",
-        size="xl",
-        zIndex=10000,
-        children=[
-            html.Div(id='add-place-map', style={'height': '400px', 'marginBottom': '20px'}),
-            dmc.Grid(
-                children=[
-                    dmc.GridCol(
-                        [
-                            html.Div(id="place-autocomplete-container"),
-                        ],
-                        span=12
-                    ),
-                    dmc.GridCol(
-                        [
-                            dmc.Text("Place Name", fw=500, mt="md"),
-                            dcc.Input(id="place-name-input",
-                                      style={"width": "100%"}),
-                        ],
-                        span=12
-                    ),
-                    dmc.GridCol(
-                        [
-                            dmc.Text("Address", fw=500, mt="md"),
-                            dcc.Input(id="place-address-input",
-                                      style={"width": "100%"}),
-                        ],
-                        span=12
-                    ),
-                    dmc.GridCol(
-                        [
-                            dmc.Text("Date", fw=500, mt="md"),
-                            dmc.ChipGroup(
-                                id="place-date-select", children=[], multiple=True
-                            ),
-                        ],
-                        span=12
-                    ),
-                    dmc.GridCol(
-                        [
-                            dmc.Text("Notes", fw=500, mt="md"),
-                            dmc.Textarea(
-                                id="place-notes-input", label="Notes (Optional)"
-                            ),
-                        ],
-                        span=12
-                    ),
-                ],
-                gutter="md"
-            ),
-            dmc.Group(
-                [
-                    dmc.Button("Cancel", id="cancel-place-btn", variant="outline"),
-                    dmc.Button("Save Place", id="save-place-btn"),
-                ],
-                justify="flex-end",
-                style={"marginTop": "20px"},
-            ),
-        ],
-    )
 
 
 def create_journal_edit_layout(journal):
@@ -219,7 +59,7 @@ def create_journal_edit_layout(journal):
                 id="output-image-upload",
                 src=journal.get(
                     "cover_image_url",
-                    "https://via.placeholder.com/200x150",
+                    "data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150' viewBox='0 0 200 150' fill='%23ccc'%3e%3crect width='200' height='150'/%3e%3c/svg%3e",
                 ),
                 style={
                     'width': '100%',
@@ -325,12 +165,6 @@ def create_journal_edit_layout(journal):
                 gutter="xl",
             ),
             html.Hr(style={"margin": "2rem 0"}),
-            html.H2("Location Map"),
-            dcc.Graph(
-                id='place-map',
-                figure=create_initial_map(),
-                style={'height': '400px', 'width': '100%', 'marginBottom': '2rem'}
-            ),
             dmc.Group(
                 [
                     html.H2("Timeline"),
@@ -338,26 +172,6 @@ def create_journal_edit_layout(journal):
                 justify="space-between",
             ),
             html.Div(id="full-timeline-container"),
-            create_add_place_modal(),
-            dmc.Modal(
-                id="delete-confirm-modal",
-                title="Confirm Deletion",
-                children=[
-                    dmc.Text(
-                        "Are you sure you want to delete this place? This action cannot be undone."),
-                    dmc.Group(
-                        [
-                            dmc.Button(
-                                "Cancel", id="cancel-delete-btn", variant="outline"),
-                            dmc.Button(
-                                "Confirm", id="confirm-delete-btn", color="red"),
-                        ],
-                        justify="flex-end",
-                        style={"marginTop": "1rem"},
-                    ),
-                ],
-                zIndex=10001,
-            ),
             dmc.Group(
                 [
                     dmc.Button(
@@ -381,17 +195,95 @@ def create_journal_edit_layout(journal):
 def journal_edit_layout(journal_id=None, auth_data=None):
     return html.Div(
         [
+            dcc.Store(id="journal-edit-page-loaded", data=True),
             dcc.Store(id="journal-edit-store"),
-            dcc.Store(id="places-store"),
-            # This hidden input is a more reliable way to pass data from JS to Python
-            dcc.Input(id="selected-place-json", type="hidden"),
             dcc.Store(id="page-load-store", data=False),
-            dcc.Store(id="place-to-delete-store"),
-            dcc.Store(id="place-to-edit-store"),
+            dcc.Store(id="timeline-update-store"),
             html.Div(id="script-error-handler-output", style={"display": "none"}),
             html.Div(id="map-error-div", style={"color": "red"}),
-            dcc.Interval(
-                id="journal-load-interval", interval=500, n_intervals=0, max_intervals=5
+            dmc.Modal(
+                id="add-place-modal",
+                title="Add a Place to Your Journal",
+                zIndex=10000,
+                children=[
+                    dcc.Store(id='modal-context-store'),
+                    dmc.MultiSelect(
+                        id='day-select-multiselect',
+                        label="Select Day(s)",
+                        placeholder="You can add this place to multiple days",
+                        styles={'dropdown': {'zIndex': 10001}}
+                    ),
+                    dcc.Store(id='gmaps-place-data-store'),
+                    dcc.Interval(id='gmaps-data-poller', interval=200, disabled=True),
+                    dmc.TextInput(id='place-autocomplete-input', label="Search for a place"),
+                    html.Div(id='map-canvas', style={'height': '300px', 'marginTop': '1rem'}),
+                    dmc.Grid(
+                        children=[
+                            dmc.GridCol(dmc.TextInput(id='place-name-output', label="Place Name", readOnly=True), span=6),
+                            dmc.GridCol(dmc.TextInput(id='place-type-output', label="Google Category", readOnly=True), span=6),
+                        ],
+                        gutter="xl",
+                    ),
+                    dmc.TextInput(id='place-address-output', label="Address", readOnly=True),
+                    dmc.TextInput(id='place-coords-output', label="Coordinates", readOnly=True),
+                    dmc.MultiSelect(
+                        id='place-type-multiselect',
+                        label="Type (Tag)",
+                        data=[
+                            "Food & Beverages", "Shop", "Accommodation", "Office", "Mall",
+                            "Street Stall", "Farmers Market", "Parking", "Petrol Station",
+                            "RnR", "Toilet"
+                        ],
+                        placeholder="Select tags that apply",
+                        styles={'dropdown': {'zIndex': 10001}}
+                    ),
+                    dmc.Textarea(id='place-opening-hours-output', label="Opening Hours", readOnly=True, autosize=True, minRows=2),
+                    dmc.CheckboxGroup(
+                        id='place-friendliness-checkbox',
+                        label="Friendliness",
+                        children=[
+                            dmc.Checkbox(label="OKU Friendly", value="oku"),
+                            dmc.Checkbox(label="Family Friendly", value="family"),
+                            dmc.Checkbox(label="Kids Friendly", value="kids"),
+                        ],
+                    ),
+                    dmc.Grid(
+                        children=[
+                            dmc.GridCol(dmc.TextInput(id='place-phone-output', label="Phone", readOnly=True), span=6),
+                            dmc.GridCol(dmc.TextInput(id='place-whatsapp-input', label="WhatsApp"), span=6),
+                        ],
+                        gutter="xl",
+                    ),
+                    dmc.TextInput(id='place-website-output', label="Website", readOnly=True),
+                    dmc.Accordion(
+                        children=[
+                            dmc.AccordionItem(
+                                [
+                                    dmc.AccordionControl("Social Media Links"),
+                                    dmc.AccordionPanel(
+                                        [
+                                            dmc.TextInput(id='social-facebook-input', label="Facebook"),
+                                            dmc.TextInput(id='social-instagram-input', label="Instagram"),
+                                            dmc.TextInput(id='social-tiktok-input', label="TikTok"),
+                                            dmc.TextInput(id='social-youtube-input', label="YouTube"),
+                                            dmc.TextInput(id='social-linkedin-input', label="LinkedIn"),
+                                        ]
+                                    ),
+                                ],
+                                value="socials"
+                            )
+                        ]
+                    ),
+                    dmc.Textarea(id='place-description-textarea', label="Description"),
+                    dmc.Group(
+                        [
+                            dmc.Button("Confirm", id="confirm-add-place-btn"),
+                            dmc.Button("Cancel", id="cancel-add-place-btn", color="red"),
+                        ],
+                        justify="flex-end",
+                        style={'marginTop': '1rem'}
+                    ),
+                ],
             ),
             html.Div(
                 id="journal-edit-content",

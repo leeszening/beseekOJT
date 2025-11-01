@@ -397,6 +397,7 @@ def register_home_callbacks(app):
                     children=initials, radius="xl", color="blue"
                 )
 
+            status = journal.get("status", "draft")
             card = dmc.Card(
                 children=[
                     dmc.CardSection(
@@ -417,7 +418,11 @@ def register_home_callbacks(app):
                                     ),
                                 ],
                             ),
-                            dmc.Badge(duration_str, color="blue", variant="light"),
+                            dmc.Badge(
+                                status.capitalize(),
+                                color="blue" if status == "draft" else "green",
+                                variant="light",
+                            ),
                         ],
                         justify="space-between",
                         mt="md",
@@ -529,6 +534,7 @@ def register_home_callbacks(app):
                     )
                 )
 
+            duration_str = f"{journal.get('days', 1)} Days"
             card = dmc.Card(
                 children=[
                     dmc.CardSection(
